@@ -3,8 +3,9 @@ import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
-  output: 'static',
+  site: 'https://mop-insite.com',
   base: '/',
+  output: 'static',
   build: {
     format: 'file',
     inlineStylesheets: 'always',
