@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { fetchGuideData } from '../utils/dataFetcher';
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async (context) => {
   const baseUrl = context.url.origin;
   const currentDate = new Date().toISOString().split('T')[0];
 
