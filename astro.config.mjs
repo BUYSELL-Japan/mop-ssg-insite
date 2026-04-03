@@ -8,6 +8,7 @@ export default defineConfig({
   output: 'static',
   build: {
     format: 'file',
+    assets: '_ssg_assets',
     inlineStylesheets: 'always',
     assetsPrefix: '/'
   },
