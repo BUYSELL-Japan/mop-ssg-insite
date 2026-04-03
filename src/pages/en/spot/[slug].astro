@@ -1,0 +1,379 @@
+---
+import {
+  type GuideItem,
+  type Language,
+  getLocalizedText,
+  t
+} from '../../../utils/language';
+import { fetchGuideData } from '../../../utils/dataFetcher';
+import LanguageSelector from '../../../components/LanguageSelector.astro';
+import Layout from '../../../layouts/Layout.astro';
+import {
+  generateTouristAttractionSchema,
+  generateBreadcrumbSchema,
+  generateWebPageSchema
+} from '../../../utils/schema';
+
+export async function getStaticPaths() {
+  try {
+    const guideItems = await fetchGuideData();
+
+    const paths = [];
+
+    for (const item of guideItems) {
+      if (item && item.slug) {
+        paths.push({
+          params: { slug: item.slug },
+          props: { guideData: item }
+        });
+      }
+    }
+
+    return paths;
+  } catch (error) {
+    console.error('Error in getStaticPaths:', error);
+    return [];
+  }
+}
+
+const { guideData } = Astro.props;
+const currentLanguage: Language = 'en';
+
+const pinId = guideData.pin_id;
+const mopUrl = `${Astro.url.origin}/?pin_id=${pinId}&lang=en`;
+
+const homeText = t('home', currentLanguage);
+const detailInfoText = t('detailInfo', currentLanguage);
+const viewOtherSpotsText = t('viewOtherSpots', currentLanguage);
+const viewInMopText = 'View in MOP App';
+const viewMapTicketsText = 'View map, tickets & full guide';
+
+const spotTitle = getLocalizedText(guideData, 'title', currentLanguage);
+const pageTitle = `Okinawa Map & Guide - ${spotTitle} - MOP`;
+const fullDescription = getLocalizedText(guideData, 'description_en', currentLanguage);
+const truncatedDescription = fullDescription.length > 140 ? fullDescription.substring(0, 140) + '...' : fullDescription;
+const pageDescription = `${truncatedDescription} Click to view tickets, map & the full guide in MOP!`;
+const baseUrl = Astro.url.origin;
+const ogUrl = `${baseUrl}/en/spot/${guideData.slug}/`;
+const ogImage = guideData.main_image_url;
+
+const touristAttractionSchema = generateTouristAttractionSchema(guideData, currentLanguage, ogUrl);
+const breadcrumbSchema = generateBreadcrumbSchema(guideData.category, spotTitle, currentLanguage, baseUrl, guideData.slug);
+const webPageSchema = generateWebPageSchema(guideData, currentLanguage, ogUrl, baseUrl);
+
+const alternateUrls = {
+  en: `${baseUrl}/en/spot/${guideData.slug}/`,
+  zh: `${baseUrl}/zh/spot/${guideData.slug}/`
+};
+---
+
+<Layout title={pageTitle} description={pageDescription} ogUrl={ogUrl} ogImage={ogImage} alternateUrls={alternateUrls}>
+  <script type="application/ld+json" set:html={JSON.stringify(touristAttractionSchema)} />
+  <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+  <script type="application/ld+json" set:html={JSON.stringify(webPageSchema)} />
+
+  <main class="guide-container">
+    <div class="language-selector-container">
+      <LanguageSelector currentLanguage={currentLanguage} currentPath={`/en/spot/${guideData.slug}/`} />
+    </div>
+
+    <article class="guide-article">
+      <nav class="breadcrumb">
+        <a href="/en/spot/" class="breadcrumb-link">🏠 {homeText}</a>
+        <span class="breadcrumb-separator">›</span>
+        <span class="breadcrumb-current">{getLocalizedText(guideData, 'title', currentLanguage)}</span>
+      </nav>
+
+      <header class="guide-header">
+        <div class="header-content">
+          <h1 class="main-title">{getLocalizedText(guideData, 'title', currentLanguage)}</h1>
+        </div>
+        <div class="header-wave"></div>
+      </header>
+
+      <div class="content-wrapper">
+        {guideData.photo_url && (
+          <section class="image-section">
+            <div class="image-container">
+              <img
+                src={guideData.photo_url}
+                alt={spotTitle}
+                class="spot-image"
+                loading="lazy"
+              />
+            </div>
+          </section>
+        )}
+
+        <section class="description-section">
+          <div class="content-card">
+            <h2 class="section-title">{detailInfoText}</h2>
+            <div class="description-content">
+              <p>{getLocalizedText(guideData, 'description_en', currentLanguage)}</p>
+            </div>
+          </div>
+        </section>
+
+
+        <section class="cta-section">
+          <div class="cta-card">
+            <h3 class="cta-title">{viewInMopText}</h3>
+            <p class="cta-description">{viewMapTicketsText}</p>
+            <a href={mopUrl} class="mop-button" target="_blank" rel="noopener noreferrer">
+              Open MOP App →
+            </a>
+          </div>
+        </section>
+
+        <section class="navigation-section">
+          <div class="nav-card">
+            <a href="/en/" class="back-button">← {viewOtherSpotsText}</a>
+          </div>
+        </section>
+      </div>
+
+    </article>
+  </main>
+</Layout>
+
+<style>
+  .language-selector-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+  }
+
+  .guide-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 50%, #4dd0e1 100%);
+  }
+
+  .guide-article {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .breadcrumb {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    backdrop-filter: blur(10px);
+  }
+
+  .breadcrumb-link {
+    color: #00838f;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+
+  .breadcrumb-link:hover {
+    color: #4dd0e1;
+  }
+
+  .breadcrumb-separator {
+    margin: 0 0.8rem;
+    color: #666;
+  }
+
+  .breadcrumb-current {
+    color: #424242;
+    font-weight: 500;
+  }
+
+  .guide-header {
+    background: linear-gradient(135deg, #26c6da 0%, #4dd0e1 50%, #80deea 100%);
+    color: white;
+    padding: 4rem 2rem 6rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header-content {
+    position: relative;
+    z-index: 2;
+  }
+
+  .main-title {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: 0.02em;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .header-wave {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120'%3E%3Cpath d='M0,50 Q300,10 600,50 T1200,50 L1200,120 L0,120 Z' fill='%23ffffff'/%3E%3C/svg%3E") no-repeat center bottom;
+    background-size: cover;
+  }
+
+  .content-wrapper {
+    background: white;
+    padding: 2rem;
+  }
+
+  .content-card {
+    background: white;
+    border-radius: 15px;
+    padding: 2.5rem;
+    margin: 2rem auto;
+    max-width: 800px;
+    box-shadow: 0 10px 30px rgba(0, 188, 212, 0.1);
+    border-left: 5px solid #4dd0e1;
+  }
+
+  .section-title {
+    color: #006064;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 1.5rem 0;
+    position: relative;
+    display: inline-block;
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, #4dd0e1, #00bcd4);
+    border-radius: 2px;
+  }
+
+  .description-content {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: #424242;
+  }
+
+  .navigation-section {
+    max-width: 800px;
+    margin: 3rem auto;
+    text-align: center;
+  }
+
+  .nav-card {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 10px 30px rgba(0, 188, 212, 0.1);
+  }
+
+  .back-button {
+    display: inline-block;
+    background: linear-gradient(135deg, #4dd0e1, #00bcd4);
+    color: white;
+    text-decoration: none;
+    padding: 1rem 2rem;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 15px rgba(77, 208, 225, 0.3);
+  }
+
+  .back-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(77, 208, 225, 0.4);
+    background: linear-gradient(135deg, #00bcd4, #0097a7);
+  }
+
+  .image-section {
+    max-width: 1000px;
+    margin: 0 auto 2rem;
+    padding: 0 2rem;
+  }
+
+  .image-container {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 15px 40px rgba(0, 188, 212, 0.2);
+    background: white;
+  }
+
+  .spot-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+    max-height: 600px;
+    margin: 0 auto;
+  }
+
+  .cta-section {
+    max-width: 800px;
+    margin: 3rem auto;
+    text-align: center;
+  }
+
+  .cta-card {
+    background: linear-gradient(135deg, #26c6da 0%, #4dd0e1 50%, #80deea 100%);
+    border-radius: 20px;
+    padding: 3rem 2rem;
+    box-shadow: 0 15px 40px rgba(77, 208, 225, 0.3);
+  }
+
+  .cta-title {
+    color: white;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  }
+
+  .cta-description {
+    color: white;
+    font-size: 1.1rem;
+    margin: 0 0 2rem 0;
+    opacity: 0.95;
+  }
+
+  .mop-button {
+    display: inline-block;
+    background: white;
+    color: #00838f;
+    text-decoration: none;
+    padding: 1.2rem 3rem;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .mop-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    background: #f5f5f5;
+  }
+
+  @media (max-width: 768px) {
+    .breadcrumb {
+      padding: 1rem;
+      font-size: 0.8rem;
+    }
+
+    .guide-header {
+      padding: 3rem 1rem 4rem;
+    }
+
+    .content-wrapper {
+      padding: 1rem;
+    }
+
+    .content-card {
+      padding: 2rem 1.5rem;
+      margin: 1.5rem auto;
+    }
+  }
+</style>
