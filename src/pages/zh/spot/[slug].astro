@@ -24,7 +24,21 @@ export async function getStaticPaths() {
       if (item && item.slug) {
         paths.push({
           params: { slug: item.slug },
-          props: { guideData: item }
+          props: { 
+            guideData: {
+              pin_id: item.pin_id,
+              slug: item.slug,
+              title: item.title,
+              title_zh_tw: item.title_zh_tw,
+              description_en: item.description_en,
+              description_zh_tw: item.description_zh_tw,
+              photo_url: item.photo_url,
+              category: item.category,
+              address: item.address,
+              address_zh_tw: item.address_zh_tw,
+              main_image_url: item.main_image_url
+            }
+          }
         });
       }
     }
