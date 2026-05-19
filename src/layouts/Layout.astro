@@ -56,6 +56,16 @@ const pageUrl = ogUrl || `${Astro.url.origin}${Astro.url.pathname}`;
 		{alternateUrls?.en && <link rel="alternate" hreflang="en" href={alternateUrls.en} />}
 		{alternateUrls?.zh && <link rel="alternate" hreflang="zh-Hans" href={alternateUrls.zh} />}
 		{alternateUrls?.en && <link rel="alternate" hreflang="x-default" href={alternateUrls.en} />}
+
+		<!-- Google tag (gtag.js) -->
+		<script async src="https://www.googletagmanager.com/gtag/js?id=G-Q8W5Y2G7QW"></script>
+		<script is:inline>
+		  window.dataLayer = window.dataLayer || [];
+		  function gtag(){dataLayer.push(arguments);}
+		  gtag('js', new Date());
+
+		  gtag('config', 'G-Q8W5Y2G7QW');
+		</script>
 	</head>
 	<body>
 		<slot />
