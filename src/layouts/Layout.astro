@@ -9,6 +9,7 @@ interface Props {
   alternateUrls?: {
     en?: string;
     zh?: string;
+    ko?: string;
   };
   noindex?: boolean;
 }
@@ -68,6 +69,7 @@ const pageUrl = ogUrl || `${Astro.url.origin}${cleanPathname}`;
 		<!-- hreflang tags for multilingual SEO (zh pages are Traditional Chinese) -->
 		{alternateUrls?.en && <link rel="alternate" hreflang="en" href={alternateUrls.en} />}
 		{alternateUrls?.zh && <link rel="alternate" hreflang="zh-Hant" href={alternateUrls.zh} />}
+		{alternateUrls?.ko && <link rel="alternate" hreflang="ko" href={alternateUrls.ko} />}
 		{alternateUrls?.en && <link rel="alternate" hreflang="x-default" href={alternateUrls.en} />}
 
 		<!-- Google tag (gtag.js) -->

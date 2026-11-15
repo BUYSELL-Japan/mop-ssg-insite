@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { fetchGuideData, fetchRestaurantData } from '../utils/dataFetcher';
-import { RESTAURANT_LANGS, restaurantPath } from '../utils/restaurant';
+import { RESTAURANT_LANGS, isTranslated, restaurantPath } from '../utils/restaurant';
 
 interface SitemapEntry {
   url: string;
@@ -37,7 +37,8 @@ export async function buildRestaurantEntries(baseUrl: string): Promise<SitemapEn
   return restaurants
     // Test records get a noindex page and are kept out of the sitemap
     .filter((r) => r.source !== 'test')
-    .flatMap((r) => RESTAURANT_LANGS.map((lang) => ({
+    // Language pages that only show the English fallback are noindex, so leave them out too
+    .flatMap((r) => RESTAURANT_LANGS.filter((lang) => isTranslated(r, lang)).map((lang) => ({
       url: `${baseUrl}${restaurantPath(lang, r.slug)}`,
       lastmod: /^\d{4}-\d{2}-\d{2}/.test(r.updated_at) ? r.updated_at.slice(0, 10) : today(),
       changefreq: 'monthly',

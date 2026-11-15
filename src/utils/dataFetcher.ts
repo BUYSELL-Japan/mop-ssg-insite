@@ -138,9 +138,11 @@ export interface RestaurantItem {
   title: string;
   title_ja: string;
   title_zh_tw: string;
+  title_ko: string;
   address: string;
   address_ja: string;
   address_zh_tw: string;
+  address_ko: string;
   phone_number: string;
   opening_hours: string;
   opening_hours_note_en: string;
@@ -154,6 +156,7 @@ export interface RestaurantItem {
   official_url: string | null;
   description_en: string;
   description_zh_tw: string;
+  description_ko: string;
   photo_url: string | null;
   source: string;
   updated_at: string;
@@ -186,9 +189,11 @@ export function fetchRestaurantData(): Promise<RestaurantItem[]> {
             title: str(p.title),
             title_ja: str(p.title_ja ?? p['title.ja']),
             title_zh_tw: str(p.title_zh_tw),
+            title_ko: str(p.title_ko),
             address: str(p.address),
             address_ja: str(p.address_ja),
             address_zh_tw: str(p['address_zh-tw'] ?? p.address_zh_tw),
+            address_ko: str(p.address_ko),
             phone_number: str(p.phone_number),
             opening_hours: str(p.opening_hours),
             opening_hours_note_en: str(p.opening_hours_note_en),
@@ -202,6 +207,7 @@ export function fetchRestaurantData(): Promise<RestaurantItem[]> {
             official_url: p.official_url ? str(p.official_url) : null,
             description_en: str(p.description_en),
             description_zh_tw: str(p.description_zh_tw),
+            description_ko: str(p.description_ko),
             photo_url: p.photo_url ? str(p.photo_url) : null,
             source: str(p.source),
             updated_at: str(p.updated_at),

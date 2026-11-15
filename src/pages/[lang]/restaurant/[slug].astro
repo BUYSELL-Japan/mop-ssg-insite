@@ -2,7 +2,7 @@
 import Layout from '../../../layouts/Layout.astro';
 import LanguageSelector from '../../../components/LanguageSelector.astro';
 import { fetchRestaurantData, type RestaurantItem } from '../../../utils/dataFetcher';
-import { RESTAURANT_LANGS, localized, restaurantPath, type RestaurantLang } from '../../../utils/restaurant';
+import { RESTAURANT_LANGS, isTranslated, localized, restaurantPath, type RestaurantLang } from '../../../utils/restaurant';
 import { generateRestaurantSchema, generateBreadcrumbSchema } from '../../../utils/schema';
 
 export async function getStaticPaths() {
@@ -34,14 +34,20 @@ const text = {
     genre: '類型', about: '介紹', openMop: '在 MOP 地圖中查看', directions: '路線導航',
     titleSuffix: '沖繩美食指南 - MOP',
   },
+  ko: {
+    home: '홈', hours: '영업시간', price: '가격대', phone: '전화', address: '주소',
+    genre: '장르', about: '소개', openMop: 'MOP 지도에서 보기', directions: '길찾기',
+    titleSuffix: '오키나와 맛집 가이드 - MOP',
+  },
 }[lang];
 
 const baseUrl = Astro.url.origin;
 const pageUrl = `${baseUrl}${restaurantPath(lang, r.slug)}`;
-const alternateUrls = {
-  en: `${baseUrl}${restaurantPath('en', r.slug)}`,
-  zh: `${baseUrl}${restaurantPath('zh', r.slug)}`,
-};
+// hreflang only for languages that are generated and have their own content
+const altLangs = RESTAURANT_LANGS.filter((code) => isTranslated(r, code));
+const alternateUrls = Object.fromEntries(
+  altLangs.map((code) => [code, `${baseUrl}${restaurantPath(code, r.slug)}`])
+);
 
 const pageTitle = `${l.name} | ${text.titleSuffix}`;
 const pageDescription = [l.genre, l.address, l.description].filter(Boolean).join(' / ').slice(0, 160);
@@ -55,8 +61,9 @@ const directionsUrl = r.lat != null && r.lng != null
 const restaurantSchema = generateRestaurantSchema(r, lang, pageUrl);
 const breadcrumbSchema = generateBreadcrumbSchema(4, l.name, lang, baseUrl, r.slug, 'restaurant');
 
-// Test data must never be indexed
-const noindex = r.source === 'test';
+// Test data must never be indexed; neither should a language page that only shows the English fallback
+const noindex = r.source === 'test' || !isTranslated(r, lang);
+const homePath = `/${lang === 'ko' ? 'en' : lang}/spot`; // spot index exists in en/zh only
 ---
 
 <Layout title={pageTitle} description={pageDescription} ogUrl={pageUrl} ogImage={r.photo_url ?? undefined} alternateUrls={alternateUrls} noindex={noindex}>
@@ -65,11 +72,11 @@ const noindex = r.source === 'test';
 
   <main class="page">
     <div class="language-selector-container">
-      <LanguageSelector currentLanguage={lang} currentPath={restaurantPath(lang, r.slug)} />
+      <LanguageSelector currentLanguage={lang} currentPath={restaurantPath(lang, r.slug)} codes={RESTAURANT_LANGS} />
     </div>
 
     <nav class="breadcrumb">
-      <a href={`/${lang}/spot`}>🏠 {text.home}</a>
+      <a href={homePath}>🏠 {text.home}</a>
       <span>›</span>
       <span>{l.name}</span>
     </nav>
@@ -77,7 +84,7 @@ const noindex = r.source === 'test';
     <header class="hero">
       {l.genre && <p class="genre">{l.genre}</p>}
       <h1>{l.name}</h1>
-      {lang === 'zh' && r.title_ja && <p class="subtitle">{r.title_ja}</p>}
+      {lang !== 'en' && r.title_ja && <p class="subtitle">{r.title_ja}</p>}
     </header>
 
     <article class="content">

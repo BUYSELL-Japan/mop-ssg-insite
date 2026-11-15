@@ -4,9 +4,12 @@ import { languages, type Language, getLocalizedPath } from '../utils/language';
 interface Props {
   currentLanguage: Language;
   currentPath: string;
+  /** Languages to offer. Spot pages only exist in zh/en, so that is the default. */
+  codes?: Language[];
 }
 
-const { currentLanguage, currentPath } = Astro.props;
+const { currentLanguage, currentPath, codes = ['zh', 'en'] } = Astro.props;
+const options = languages.filter(l => codes.includes(l.code));
 ---
 
 <div class="language-selector">
@@ -21,7 +24,7 @@ const { currentLanguage, currentPath } = Astro.props;
       </svg>
     </button>
     <div class="language-menu" id="languageMenu">
-      {languages.map(lang => (
+      {options.map(lang => (
         <a
           href={getLocalizedPath(currentPath, lang.code)}
           class={`language-option ${lang.code === currentLanguage ? 'active' : ''}`}

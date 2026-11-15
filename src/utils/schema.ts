@@ -132,12 +132,12 @@ export function generateBreadcrumbSchema(
   spotSlug: string,
   section: 'spot' | 'restaurant' = 'spot'
 ) {
-  const lang = language === 'en' ? 'en' : 'zh';
-  // Restaurants have no index page yet, so the home crumb points at the spot index
-  const homeUrl = `${baseUrl}/${lang}/spot`;
+  const lang = language === 'en' || language === 'ko' ? language : 'zh';
+  // Restaurants have no index page yet, so the home crumb points at the spot index (en/zh only)
+  const homeUrl = `${baseUrl}/${lang === 'ko' ? 'en' : lang}/spot`;
   const spotUrl = `${baseUrl}/${lang}/${section}/${spotSlug}`;
 
-  const homeName = language === 'en' ? 'Home' : '主頁';
+  const homeName = language === 'ko' ? '홈' : language === 'en' ? 'Home' : '主頁';
 
   return {
     '@context': 'https://schema.org',

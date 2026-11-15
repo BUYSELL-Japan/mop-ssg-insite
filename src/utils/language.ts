@@ -8,13 +8,16 @@ export interface LanguageConfig {
 
 export const languages: LanguageConfig[] = [
   { code: 'zh', name: '简体中文', flag: '🇨🇳' },
-  { code: 'en', name: 'English', flag: '🇺🇸' }
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'ko', name: '한국어', flag: '🇰🇷' }
 ];
 
 export const defaultLanguage: Language = 'zh';
 
 export function getLanguageFromPath(pathname: string): Language {
-  if (pathname.startsWith('/zh')) {
+  if (pathname.startsWith('/ko')) {
+    return 'ko';
+  } else if (pathname.startsWith('/zh')) {
     return 'zh';
   } else if (pathname.startsWith('/en')) {
     return 'en';
@@ -25,7 +28,7 @@ export function getLanguageFromPath(pathname: string): Language {
 export function getLocalizedPath(path: string, language: Language): string {
   // Swap only the language prefix so /en/spot/x and /en/restaurant/x both work.
   // Cloudflare Pages serves build.format 'file' pages without a trailing slash.
-  const rest = (path || '/').replace(/^\/(zh|en)(?=\/|$)/, '').replace(/\/$/, '');
+  const rest = (path || '/').replace(/^\/(zh|en|ko)(?=\/|$)/, '').replace(/\/$/, '');
 
   return `/${language}${rest || '/spot'}`;
 }
