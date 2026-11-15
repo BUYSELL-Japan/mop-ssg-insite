@@ -28,8 +28,8 @@ const pageDescription = t('siteDescription', currentLanguage);
 
 const baseUrl = Astro.url.origin;
 const alternateUrls = {
-  en: `${baseUrl}/en/spot/`,
-  zh: `${baseUrl}/zh/spot/`
+  en: `${baseUrl}/en/spot`,
+  zh: `${baseUrl}/zh/spot`
 };
 ---
 
@@ -37,7 +37,7 @@ const alternateUrls = {
   <main class="top-page">
     <!-- Language Selector -->
     <div class="language-selector-container">
-      <LanguageSelector currentLanguage={currentLanguage} currentPath="/en/spot/" />
+      <LanguageSelector currentLanguage={currentLanguage} currentPath="/en/spot" />
     </div>
 
     <!-- ヘッダーセクション -->
@@ -69,7 +69,7 @@ const alternateUrls = {
           <div class="guides-grid">
             {guideItems.map((item, index) => (
               <article class="guide-card">
-                <a href={`/en/spot/${item.slug}/?pin_id=${item.pin_id}`} class="guide-link">
+                <a href={`/en/spot/${item.slug}?pin_id=${item.pin_id}`} class="guide-link">
                   <div class="guide-image-container">
                     {item.main_image_url && (
                       <img

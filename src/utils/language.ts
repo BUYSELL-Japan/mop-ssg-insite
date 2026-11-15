@@ -24,9 +24,10 @@ export function getLanguageFromPath(pathname: string): Language {
 
 export function getLocalizedPath(path: string, language: Language): string {
   const safePath = path || '/';
-  const cleanPath = safePath.replace(/^\/(zh|en)\/spot\//, '/');
+  // Cloudflare Pages serves build.format 'file' pages without a trailing slash
+  const cleanPath = safePath.replace(/^\/(zh|en)\/spot(\/|$)/, '/').replace(/\/$/, '');
 
-  return `/${language}/spot${cleanPath === '/' ? '/' : cleanPath}`;
+  return `/${language}/spot${cleanPath}`;
 }
 
 export interface GuideItem {

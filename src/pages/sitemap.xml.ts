@@ -9,19 +9,19 @@ export const GET: APIRoute = async (context) => {
     const guideItems = await fetchGuideData();
 
     const staticUrls = [
-      { url: `${baseUrl}/en/spot/`, lastmod: currentDate, changefreq: 'weekly', priority: '1.0' },
-      { url: `${baseUrl}/zh/spot/`, lastmod: currentDate, changefreq: 'weekly', priority: '1.0' },
+      { url: `${baseUrl}/en/spot`, lastmod: currentDate, changefreq: 'weekly', priority: '1.0' },
+      { url: `${baseUrl}/zh/spot`, lastmod: currentDate, changefreq: 'weekly', priority: '1.0' },
     ];
 
     const dynamicUrls = guideItems.flatMap(item => [
       {
-        url: `${baseUrl}/en/spot/${item.slug}/`,
+        url: `${baseUrl}/en/spot/${item.slug}`,
         lastmod: currentDate,
         changefreq: 'monthly',
         priority: '0.8'
       },
       {
-        url: `${baseUrl}/zh/spot/${item.slug}/`,
+        url: `${baseUrl}/zh/spot/${item.slug}`,
         lastmod: currentDate,
         changefreq: 'monthly',
         priority: '0.8'

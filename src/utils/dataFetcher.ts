@@ -113,7 +113,8 @@ export async function fetchGuideData() {
             photo_url: feature.properties.photo_url || undefined,
             category: feature.properties.category,
             address: feature.properties.address,
-            address_zh_tw: feature.properties.address_zh_tw
+            // GeoJSON key is "address_zh-tw" (hyphen)
+            address_zh_tw: feature.properties['address_zh-tw'] || feature.properties.address_zh_tw
           };
         });
     }

@@ -25,7 +25,9 @@ const defaultDescription = currentLanguage === 'zh'
 
 const pageTitle = title || defaultTitle;
 const pageDescription = description || defaultDescription;
-const pageUrl = ogUrl || `${Astro.url.origin}${Astro.url.pathname}`;
+// build.format 'file' gives pathnames like /en/spot.html; Cloudflare Pages serves them as /en/spot
+const cleanPathname = Astro.url.pathname.replace(/\.html$/, '').replace(/(.)\/$/, '$1');
+const pageUrl = ogUrl || `${Astro.url.origin}${cleanPathname}`;
 ---
 
 <!doctype html>
@@ -59,9 +61,11 @@ const pageUrl = ogUrl || `${Astro.url.origin}${Astro.url.pathname}`;
 		<meta property="twitter:description" content={pageDescription} />
 		{ogImage && <meta property="twitter:image" content={ogImage} />}
 
-		<!-- hreflang tags for multilingual SEO -->
+		<link rel="canonical" href={pageUrl} />
+
+		<!-- hreflang tags for multilingual SEO (zh pages are Traditional Chinese) -->
 		{alternateUrls?.en && <link rel="alternate" hreflang="en" href={alternateUrls.en} />}
-		{alternateUrls?.zh && <link rel="alternate" hreflang="zh-Hans" href={alternateUrls.zh} />}
+		{alternateUrls?.zh && <link rel="alternate" hreflang="zh-Hant" href={alternateUrls.zh} />}
 		{alternateUrls?.en && <link rel="alternate" hreflang="x-default" href={alternateUrls.en} />}
 
 		<!-- Google tag (gtag.js) -->

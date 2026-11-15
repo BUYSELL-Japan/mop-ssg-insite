@@ -43,7 +43,8 @@ export function getCategoryName(categoryNumber: number | undefined, language: La
 }
 
 function getSchemaTypeByCategory(categoryNumber: number | undefined): string {
-  const category = categoryNumber || 1;
+  // GeoJSON stores category as a string ("4"), so normalize before the numeric switch
+  const category = Number(categoryNumber) || 1;
 
   switch (category) {
     case 1:
@@ -99,10 +100,10 @@ export function generateBreadcrumbSchema(
   baseUrl: string,
   spotSlug: string
 ) {
-  const homeUrl = language === 'en' ? `${baseUrl}/en/spot/` : `${baseUrl}/zh/spot/`;
+  const homeUrl = language === 'en' ? `${baseUrl}/en/spot` : `${baseUrl}/zh/spot`;
   const spotUrl = language === 'en'
-    ? `${baseUrl}/en/spot/${spotSlug}/`
-    : `${baseUrl}/zh/spot/${spotSlug}/`;
+    ? `${baseUrl}/en/spot/${spotSlug}`
+    : `${baseUrl}/zh/spot/${spotSlug}`;
 
   const homeName = language === 'en' ? 'Home' : '主頁';
 
