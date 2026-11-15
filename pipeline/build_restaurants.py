@@ -14,6 +14,7 @@ All state lives in ./data (git-ignored):
 """
 
 import argparse
+import collections
 import csv
 import datetime as dt
 import json
@@ -281,6 +282,31 @@ def num(v, cast):
         return None
 
 
+# 2026-11-16 decision: places whose primary genre is not a place to eat or drink are left out.
+# Only the primary (first) genre counts, so e.g. "noodle_shop / hotel" stays in.
+NON_FOOD_GENRES = {
+    # lodging
+    "hotel", "resort_hotel", "extended_stay_hotel", "budget_japanese_inn", "inn", "guest_house",
+    "bed_and_breakfast", "hostel", "lodging", "cottage", "campground",
+    # sights, leisure, venues
+    "tourist_attraction", "amusement_park", "amusement_center", "indoor_playground", "park",
+    "botanical_garden", "museum", "art_museum", "art_gallery", "performing_arts_theater",
+    "golf_course", "sports_complex", "fishing_charter", "tour_agency", "ranch", "farm",
+    "wedding_venue", "banquet_hall", "barbecue_area", "karaoke", "internet_cafe",
+    # shops that are not eateries
+    "shopping_mall", "clothing_store", "book_store", "furniture_store", "sporting_goods_store",
+    "florist", "gift_shop", "pet_store", "liquor_store", "wholesaler",
+    # services, offices
+    "hair_salon", "nail_salon", "spa", "yoga_studio", "medical_clinic", "health",
+    "corporate_office", "coworking_space", "non_profit_organization", "manufacturer",
+    "parking_lot",
+}
+
+
+def primary_genre(row):
+    return row["業態分類"].split("/")[0].strip()
+
+
 def assign_pin_ids(rows):
     """place_id -> pin_id, stable across runs; new places get the next free number."""
     pins = load_json(PIN_PATH, {})
@@ -319,7 +345,11 @@ def cmd_build(args):
     today = dt.date.today().isoformat()
 
     features, unconverted_hours, missing_geo = [], 0, 0
+    excluded = collections.Counter()
     for r in rows:
+        if primary_genre(r) in NON_FOOD_GENRES:
+            excluded[primary_genre(r)] += 1
+            continue
         pid = r["place_id"]
         pin = pins[pid]
         name = r["店舗名"].strip()
@@ -354,7 +384,7 @@ def cmd_build(args):
                 "price_range": price_range,
                 "price_level": price_level,
                 "category": "4",
-                "genre": r["業態分類"].split("/")[0].strip() or None,
+                "genre": primary_genre(r) or None,
                 "geocode_source": "nominatim" if has_geo else None,
                 "geocode_precision": geo.get("type") if has_geo else None,
                 # 2026-11-15 decision: coordinates are town-level, so no map pins yet (geometry is kept)
@@ -382,6 +412,7 @@ def cmd_build(args):
     print(f"build: {n} features -> {OUT_PATH} ({os.path.getsize(OUT_PATH) / 1e6:.1f} MB)")
     print(f"  with coordinates: {n - missing_geo} ({(n - missing_geo) / n:.1%}), without: {missing_geo}")
     print(f"  opening_hours kept as original text: {unconverted_hours}")
+    print(f"  excluded as non-food genre: {sum(excluded.values())} {dict(excluded.most_common())}")
 
 
 def cmd_fetch(args):
