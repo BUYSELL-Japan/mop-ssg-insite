@@ -1,0 +1,137 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import LanguageSelector from '../../../components/LanguageSelector.astro';
+import { fetchRestaurantData, type RestaurantItem } from '../../../utils/dataFetcher';
+import { RESTAURANT_LANGS, localized, restaurantPath, type RestaurantLang } from '../../../utils/restaurant';
+import { generateRestaurantSchema, generateBreadcrumbSchema } from '../../../utils/schema';
+
+export async function getStaticPaths() {
+  const restaurants = await fetchRestaurantData();
+  return RESTAURANT_LANGS.flatMap((lang) =>
+    restaurants.map((restaurant) => ({
+      params: { lang, slug: restaurant.slug },
+      props: { restaurant },
+    }))
+  );
+}
+
+interface Props {
+  restaurant: RestaurantItem;
+}
+
+const { restaurant: r } = Astro.props;
+const lang = Astro.params.lang as RestaurantLang;
+const l = localized(r, lang);
+
+const text = {
+  en: {
+    home: 'Home', hours: 'Opening hours', price: 'Price range', phone: 'Phone', address: 'Address',
+    genre: 'Genre', about: 'About', openMop: 'View on the MOP map', directions: 'Get directions',
+    titleSuffix: 'Okinawa Restaurant Guide - MOP',
+  },
+  zh: {
+    home: '首頁', hours: '營業時間', price: '價格範圍', phone: '電話', address: '地址',
+    genre: '類型', about: '介紹', openMop: '在 MOP 地圖中查看', directions: '路線導航',
+    titleSuffix: '沖繩美食指南 - MOP',
+  },
+}[lang];
+
+const baseUrl = Astro.url.origin;
+const pageUrl = `${baseUrl}${restaurantPath(lang, r.slug)}`;
+const alternateUrls = {
+  en: `${baseUrl}${restaurantPath('en', r.slug)}`,
+  zh: `${baseUrl}${restaurantPath('zh', r.slug)}`,
+};
+
+const pageTitle = `${l.name} | ${text.titleSuffix}`;
+const pageDescription = [l.genre, l.address, l.description].filter(Boolean).join(' / ').slice(0, 160);
+
+// Deep link into the map app; only meaningful when the pin is shown on the map
+const mopUrl = `${baseUrl}/?pin_id=${r.pin_id}&lang=${lang}`;
+const directionsUrl = r.lat != null && r.lng != null
+  ? `https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}`
+  : null;
+
+const restaurantSchema = generateRestaurantSchema(r, lang, pageUrl);
+const breadcrumbSchema = generateBreadcrumbSchema(4, l.name, lang, baseUrl, r.slug, 'restaurant');
+
+// Test data must never be indexed
+const noindex = r.source === 'test';
+---
+
+<Layout title={pageTitle} description={pageDescription} ogUrl={pageUrl} ogImage={r.photo_url ?? undefined} alternateUrls={alternateUrls} noindex={noindex}>
+  <script type="application/ld+json" set:html={JSON.stringify(restaurantSchema)} />
+  <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+
+  <main class="page">
+    <div class="language-selector-container">
+      <LanguageSelector currentLanguage={lang} currentPath={restaurantPath(lang, r.slug)} />
+    </div>
+
+    <nav class="breadcrumb">
+      <a href={`/${lang}/spot`}>🏠 {text.home}</a>
+      <span>›</span>
+      <span>{l.name}</span>
+    </nav>
+
+    <header class="hero">
+      {l.genre && <p class="genre">{l.genre}</p>}
+      <h1>{l.name}</h1>
+      {lang === 'zh' && r.title_ja && <p class="subtitle">{r.title_ja}</p>}
+    </header>
+
+    <article class="content">
+      {r.photo_url && <img src={r.photo_url} alt={l.name} class="photo" loading="lazy" />}
+
+      {l.description && (
+        <section class="card">
+          <h2>{text.about}</h2>
+          <p>{l.description}</p>
+        </section>
+      )}
+
+      <section class="card">
+        <dl class="info">
+          {r.opening_hours && (<><dt>{text.hours}</dt><dd>{r.opening_hours}{l.hoursNote && <span class="note">{l.hoursNote}</span>}</dd></>)}
+          {r.price_range && (<><dt>{text.price}</dt><dd>{r.price_range}</dd></>)}
+          {r.phone_number && (<><dt>{text.phone}</dt><dd><a href={`tel:${r.phone_number}`}>{r.phone_number}</a></dd></>)}
+          {l.address && (<><dt>{text.address}</dt><dd>{l.address}</dd></>)}
+        </dl>
+      </section>
+
+      <section class="actions">
+        {r.show_on_map && <a href={mopUrl} class="button primary">{text.openMop} →</a>}
+        {directionsUrl && <a href={directionsUrl} class="button" target="_blank" rel="noopener noreferrer">{text.directions}</a>}
+      </section>
+    </article>
+  </main>
+</Layout>
+
+<style>
+  .page { min-height: 100vh; background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 50%, #4dd0e1 100%); }
+  .language-selector-container { position: fixed; top: 1rem; right: 1rem; z-index: 1000; }
+  .breadcrumb { background: rgba(255, 255, 255, 0.9); padding: 1rem 2rem; display: flex; gap: 0.8rem; font-size: 0.9rem; }
+  .breadcrumb a { color: #00838f; text-decoration: none; }
+  .hero { background: linear-gradient(135deg, #26c6da, #4dd0e1, #80deea); color: #fff; padding: 4rem 2rem 3rem; text-align: center; }
+  .hero h1 { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 800; margin: 0; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
+  .genre { display: inline-block; margin: 0 0 1rem; padding: 0.3rem 1rem; border-radius: 999px; background: rgba(255, 255, 255, 0.25); font-weight: 600; }
+  .subtitle { margin: 0.8rem 0 0; opacity: 0.9; }
+  .content { max-width: 800px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  .photo { width: 100%; border-radius: 16px; margin-bottom: 1.5rem; }
+  .card { background: #fff; border-radius: 15px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 10px 30px rgba(0, 188, 212, 0.1); border-left: 5px solid #4dd0e1; }
+  .card h2 { color: #006064; margin: 0 0 1rem; }
+  .card p { line-height: 1.8; color: #424242; margin: 0; }
+  .info { display: grid; grid-template-columns: max-content 1fr; gap: 0.8rem 1.5rem; margin: 0; }
+  .info dt { font-weight: 700; color: #006064; }
+  .info dd { margin: 0; color: #424242; }
+  .info a { color: #00838f; }
+  .note { display: block; font-size: 0.85rem; color: #757575; }
+  .actions { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }
+  .button { padding: 1rem 2rem; border-radius: 30px; font-weight: 700; text-decoration: none; background: #fff; color: #00838f; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); }
+  .button.primary { background: linear-gradient(135deg, #00bcd4, #0097a7); color: #fff; }
+  @media (max-width: 600px) {
+    .breadcrumb { padding: 1rem; }
+    .info { grid-template-columns: 1fr; gap: 0.3rem; }
+    .info dd { margin-bottom: 0.8rem; }
+  }
+</style>

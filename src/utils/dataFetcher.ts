@@ -125,3 +125,89 @@ export async function fetchGuideData() {
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Restaurants (restaurants.geojson)
+// ---------------------------------------------------------------------------
+
+export const RESTAURANTS_GEOJSON_URL = 'https://s3geojsonnew.s3.ap-southeast-2.amazonaws.com/restaurants.geojson';
+
+export interface RestaurantItem {
+  pin_id: string;
+  slug: string;
+  title: string;
+  title_ja: string;
+  title_zh_tw: string;
+  address: string;
+  address_ja: string;
+  address_zh_tw: string;
+  phone_number: string;
+  opening_hours: string;
+  opening_hours_note_en: string;
+  opening_hours_note_zh_tw: string;
+  price_range: string;
+  price_level: number | null;
+  genre: string;
+  lat: number | null;
+  lng: number | null;
+  show_on_map: boolean;
+  official_url: string | null;
+  description_en: string;
+  description_zh_tw: string;
+  photo_url: string | null;
+  source: string;
+  updated_at: string;
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+let restaurantCache: Promise<RestaurantItem[]> | null = null;
+
+/**
+ * Fetches restaurants.geojson once per build (every route and the sitemap share the result).
+ * Unlike fetchGuideData, a failed fetch throws so the build fails and the previous
+ * deployment stays live, instead of silently publishing zero restaurant pages.
+ */
+export function fetchRestaurantData(): Promise<RestaurantItem[]> {
+  if (!restaurantCache) {
+    restaurantCache = fetchWithRetry(RESTAURANTS_GEOJSON_URL).then((data: any) => {
+      if (!data || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+        throw new Error('restaurants.geojson is not a FeatureCollection');
+      }
+      return data.features
+        .filter((f: any) => f?.properties?.pin_id && f.properties.slug && str(f.properties.approved) === '1')
+        .map((f: any): RestaurantItem => {
+          const p = f.properties;
+          // GeoJSON coordinates are [lng, lat]; geometry may be null until geocoded
+          const coords = f.geometry?.type === 'Point' ? f.geometry.coordinates : null;
+          return {
+            pin_id: str(p.pin_id),
+            slug: str(p.slug),
+            title: str(p.title),
+            title_ja: str(p.title_ja ?? p['title.ja']),
+            title_zh_tw: str(p.title_zh_tw),
+            address: str(p.address),
+            address_ja: str(p.address_ja),
+            address_zh_tw: str(p['address_zh-tw'] ?? p.address_zh_tw),
+            phone_number: str(p.phone_number),
+            opening_hours: str(p.opening_hours),
+            opening_hours_note_en: str(p.opening_hours_note_en),
+            opening_hours_note_zh_tw: str(p.opening_hours_note_zh_tw),
+            price_range: str(p.price_range),
+            price_level: Number.isInteger(p.price_level) ? p.price_level : null,
+            genre: str(p.genre),
+            lat: coords ? Number(coords[1]) : null,
+            lng: coords ? Number(coords[0]) : null,
+            show_on_map: p.show_on_map === true || p.show_on_map === 'true' || p.show_on_map === '1',
+            official_url: p.official_url ? str(p.official_url) : null,
+            description_en: str(p.description_en),
+            description_zh_tw: str(p.description_zh_tw),
+            photo_url: p.photo_url ? str(p.photo_url) : null,
+            source: str(p.source),
+            updated_at: str(p.updated_at),
+          };
+        });
+    });
+  }
+  return restaurantCache;
+}

@@ -23,11 +23,11 @@ export function getLanguageFromPath(pathname: string): Language {
 }
 
 export function getLocalizedPath(path: string, language: Language): string {
-  const safePath = path || '/';
-  // Cloudflare Pages serves build.format 'file' pages without a trailing slash
-  const cleanPath = safePath.replace(/^\/(zh|en)\/spot(\/|$)/, '/').replace(/\/$/, '');
+  // Swap only the language prefix so /en/spot/x and /en/restaurant/x both work.
+  // Cloudflare Pages serves build.format 'file' pages without a trailing slash.
+  const rest = (path || '/').replace(/^\/(zh|en)(?=\/|$)/, '').replace(/\/$/, '');
 
-  return `/${language}/spot${cleanPath}`;
+  return `/${language}${rest || '/spot'}`;
 }
 
 export interface GuideItem {

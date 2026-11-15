@@ -10,9 +10,10 @@ interface Props {
     en?: string;
     zh?: string;
   };
+  noindex?: boolean;
 }
 
-const { title, description, ogImage, ogUrl, alternateUrls } = Astro.props;
+const { title, description, ogImage, ogUrl, alternateUrls, noindex = false } = Astro.props;
 const currentLanguage = getLanguageFromPath(Astro.url.pathname);
 
 const defaultTitle = currentLanguage === 'zh'
@@ -45,6 +46,7 @@ const pageUrl = ogUrl || `${Astro.url.origin}${cleanPathname}`;
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="generator" content={Astro.generator} />
 		<meta name="description" content={pageDescription} />
+		{noindex && <meta name="robots" content="noindex" />}
 		<title>{pageTitle}</title>
 		
 		<!-- Open Graph / Facebook -->

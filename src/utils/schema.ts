@@ -1,4 +1,35 @@
 import type { Language } from './language';
+import type { RestaurantItem } from './dataFetcher';
+import { localized, toSchemaOpeningHours, type RestaurantLang } from './restaurant';
+
+export function generateRestaurantSchema(r: RestaurantItem, lang: RestaurantLang, pageUrl: string) {
+  const l = localized(r, lang);
+  const openingHours = toSchemaOpeningHours(r.opening_hours);
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Restaurant',
+    name: l.name,
+    ...(l.description && { description: l.description }),
+    url: pageUrl,
+    ...(r.photo_url && { image: r.photo_url }),
+    ...(l.address && {
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: l.address,
+        addressRegion: 'Okinawa',
+        addressCountry: 'JP'
+      }
+    }),
+    ...(r.phone_number && { telephone: r.phone_number }),
+    ...(openingHours.length > 0 && { openingHours }),
+    ...(r.price_range && { priceRange: r.price_range }),
+    ...(r.genre && { servesCuisine: l.genre }),
+    ...(r.lat != null && r.lng != null && {
+      geo: { '@type': 'GeoCoordinates', latitude: r.lat, longitude: r.lng }
+    })
+  };
+}
 
 interface GuideData {
   title: string;
@@ -98,12 +129,13 @@ export function generateBreadcrumbSchema(
   spotName: string,
   language: Language,
   baseUrl: string,
-  spotSlug: string
+  spotSlug: string,
+  section: 'spot' | 'restaurant' = 'spot'
 ) {
-  const homeUrl = language === 'en' ? `${baseUrl}/en/spot` : `${baseUrl}/zh/spot`;
-  const spotUrl = language === 'en'
-    ? `${baseUrl}/en/spot/${spotSlug}`
-    : `${baseUrl}/zh/spot/${spotSlug}`;
+  const lang = language === 'en' ? 'en' : 'zh';
+  // Restaurants have no index page yet, so the home crumb points at the spot index
+  const homeUrl = `${baseUrl}/${lang}/spot`;
+  const spotUrl = `${baseUrl}/${lang}/${section}/${spotSlug}`;
 
   const homeName = language === 'en' ? 'Home' : '主頁';
 
