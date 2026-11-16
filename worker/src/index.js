@@ -53,7 +53,7 @@ async function handleRequest(request) {
     }
 
     // 7-2. 飲食店詳細表示 (SSG)
-    if (path.startsWith('/en/restaurant') || path.startsWith('/zh/restaurant')) {
+    if (path.startsWith('/en/restaurant') || path.startsWith('/zh/restaurant') || path.startsWith('/ko/restaurant')) {
       return proxyFetch(originalPath, SSG_URL, request);
     }
 

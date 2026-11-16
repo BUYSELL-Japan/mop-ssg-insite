@@ -3,12 +3,12 @@ import type { RestaurantItem } from './dataFetcher';
 export type RestaurantLang = 'en' | 'zh' | 'ko';
 
 /**
- * Languages pages are generated for. 'ko' is supported by the template (falls back to
- * English when title_ko / description_ko are null) but is NOT generated yet. Before adding
- * it here: route /ko/restaurant* in worker/src/index.js, add /ko/restaurant to the
- * MOP-Okinawa SW navigateFallbackDenylist, and fill in Korean data.
+ * Languages pages are generated for. ko fields (title_ko / address_ko / description_ko) fall
+ * back to English when empty. /ko/restaurant* is routed to this project by the
+ * mop-insite-proxy Worker (worker/src/index.js) and is in the MOP-Okinawa SW
+ * navigateFallbackDenylist.
  */
-export const RESTAURANT_LANGS: RestaurantLang[] = ['en', 'zh'];
+export const RESTAURANT_LANGS: RestaurantLang[] = ['en', 'zh', 'ko'];
 
 // genre code (data) -> display label. Unknown codes fall back to the code itself.
 const GENRE_LABELS: Record<string, Record<RestaurantLang, string>> = {
@@ -25,7 +25,8 @@ export function genreLabel(code: string, lang: RestaurantLang): string {
 
 /** True when the record has its own content in this language (no English fallback needed). */
 export function isTranslated(r: RestaurantItem, lang: RestaurantLang): boolean {
-  if (lang === 'ko') return Boolean(r.title_ko && r.description_ko);
+  // Shop names usually stay in Japanese/English, so a Korean description is what makes the page Korean
+  if (lang === 'ko') return Boolean(r.description_ko);
   return true;
 }
 
