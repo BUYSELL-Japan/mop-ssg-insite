@@ -306,6 +306,22 @@ def normalize_km(result):
         result[lang] = KM_TEXT.sub(r"\1km", result[lang])
 
 
+NAME_SEPARATORS = re.compile(r"[\s\[\]（）()【】「」・/|_]+")
+
+
+def strip_known_names(facts, lang, text):
+    """Remove the shop name, each part of it, and the landmark name. The model often keeps only
+    part of the name or rewrites part of it (那覇 -> 那霸), so the parts must count as name too."""
+    name = facts.get("name") or ""
+    parts = [x for x in NAME_SEPARATORS.split(name) if x]
+    for x in sorted(set(parts + [name]) - {""}, key=len, reverse=True):
+        text = text.replace(x, "")
+    lm = facts.get("landmark")
+    if lm:
+        text = text.replace(lm["names"][lang], "")
+    return text
+
+
 def check_description(facts, result):
     """Problems a person would otherwise have to catch by eye; empty list = ok."""
     issues = []
@@ -315,9 +331,7 @@ def check_description(facts, result):
     km = m.group(1) if m else None
     for lang in ("en", "zh_tw", "ko"):
         text = result[lang]
-        rest = text.replace(name, "") if name else text
-        if lm:
-            rest = rest.replace(lm["names"][lang], "")
+        rest = strip_known_names(facts, lang, text)
         if KANA.search(rest):
             issues.append(f"{lang}: kana outside the name")
         if CLOCK_TIME.search(text):
@@ -575,6 +589,87 @@ def cmd_batch_collect(args):
     cmd_apply(args)
 
 
+# ------------------------------------------------------------------ cleanup of rows that kept failing (no API call)
+
+SENTENCE_SPLIT = {"en": r"(?<=[.!?])\s+", "zh_tw": r"(?<=[。！？])", "ko": r"(?<=[.!?。])\s+"}
+JOIN = {"en": " ", "zh_tw": "", "ko": " "}
+
+
+def cmd_cleanup(args):
+    """Rows still flagged after MAX_ATTEMPTS (decided 2026-11-16):
+    - drop sentences with clock times or meal-use words; empty the language only when no sentence is left
+    - empty the language when kana remains outside the shop / landmark name
+    Other issues stay flagged for review. The original text is kept under "before_cleanup"."""
+    cache = load_json(CACHE_PATH, {})
+    stats = collections.Counter()
+    for pid, v in cache.items():
+        if not v.get("check_issues"):
+            continue
+        facts = v["input_facts"]
+        v.setdefault("before_cleanup", {lang: v[lang] for lang in ("en", "zh_tw", "ko")})
+        for lang in ("en", "zh_tw", "ko"):
+            sents = [s for s in re.split(SENTENCE_SPLIT[lang], v[lang]) if s.strip()]
+            keep = [s for s in sents if not (CLOCK_TIME.search(s) or USE_WORDS[lang].search(s))]
+            if len(keep) < len(sents):
+                stats[f"{lang}: sentences dropped"] += len(sents) - len(keep)
+            text = JOIN[lang].join(s.strip() for s in keep)
+            if sents and not keep:
+                stats[f"{lang}: emptied (no sentence left)"] += 1
+            elif KANA.search(strip_known_names(facts, lang, text)):
+                text = ""
+                stats[f"{lang}: emptied (kana)"] += 1
+            v[lang] = text
+        remaining = [i for i in check_description(facts, v)
+                     if not any(lang_empty and i.startswith(lang) for lang, lang_empty in
+                                ((l, not v[l]) for l in ("en", "zh_tw", "ko")))]
+        if remaining:
+            v["check_issues"] = remaining
+        else:
+            v.pop("check_issues", None)
+        v["cleaned"] = True
+        stats["rows cleaned"] += 1
+    save_json(CACHE_PATH, cache)
+    for k, n in sorted(stats.items()):
+        print(f"  {k}: {n}")
+    print(f"still flagged: {sum(1 for v in cache.values() if v.get('check_issues'))}")
+
+
+def name_forms(v, lang):
+    """Ways the shop is named in this language: the name, its parts, and the subject of the
+    original first sentence (the model romanizes or translates the name, e.g. 'Wafūtei Naha')."""
+    name = v["input_facts"].get("name") or ""
+    forms = [x for x in NAME_SEPARATORS.split(name) if len(x) >= 2] + [name]
+    first = re.split(SENTENCE_SPLIT[lang], v["before_cleanup"][lang])[0]
+    if lang == "en":
+        m = re.match(r"(?:Located in [^,]+, |Open [^,]+, |Closed [^,]+, )?(.{2,60}?) (?:is|serves|offers|sits)\b", first)
+    else:
+        m = re.match(r"(.{2,30}?)(?:是|은|는|이|가)", first)
+    if m:
+        forms.append(m.group(1))
+    return [x for x in forms if x]
+
+
+def cmd_drop_nameless(args):
+    """After cleanup (decided 2026-11-16, option A): a language left with a single sentence that
+    does not name the shop ('Its limited schedule makes it ...') is emptied."""
+    cache = load_json(CACHE_PATH, {})
+    stats = collections.Counter()
+    for v in cache.values():
+        if not v.get("cleaned"):
+            continue
+        for lang in ("en", "zh_tw", "ko"):
+            text = v[lang]
+            if not text or text == v["before_cleanup"][lang]:
+                continue
+            if len([s for s in re.split(SENTENCE_SPLIT[lang], text) if s.strip()]) != 1:
+                continue
+            if not any(x in text for x in name_forms(v, lang)):
+                v[lang] = ""
+                stats[lang] += 1
+    save_json(CACHE_PATH, cache)
+    print(f"emptied single sentences without the shop name: {dict(stats)}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -584,6 +679,8 @@ def main():
     bs.add_argument("--yes", action="store_true")
     sub.add_parser("batch-status")
     sub.add_parser("batch-collect")
+    sub.add_parser("cleanup")
+    sub.add_parser("drop-nameless")
     run = sub.add_parser("run")
     run.add_argument("--limit", type=int)
     run.add_argument("--yes", action="store_true")
@@ -593,7 +690,8 @@ def main():
     args = ap.parse_args()
     {"estimate": cmd_estimate, "run": cmd_run, "show": cmd_show, "apply": cmd_apply,
      "batch-submit": cmd_batch_submit, "batch-status": cmd_batch_status,
-     "batch-collect": cmd_batch_collect}[args.cmd](args)
+     "batch-collect": cmd_batch_collect, "cleanup": cmd_cleanup,
+     "drop-nameless": cmd_drop_nameless}[args.cmd](args)
 
 
 if __name__ == "__main__":
