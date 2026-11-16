@@ -61,8 +61,9 @@ SCHEMA = {
 
 
 # Existing fields with wrong content, emptied on build (decided 2026-11-16).
-# oki176 創作和食 真-shin-: description_ja / description_ko are King Tacos text; the real content is unknown.
-FIELD_CLEARS = {"oki176": ["description_ja", "description_ko"]}
+# oki176 創作和食 真-shin-: all four descriptions are King Tacos text; the real content is unknown.
+# (title_zh_tw 「琴創作和食 Shin」 and title_kana look wrong too, but are left as they are until the facts are known.)
+FIELD_CLEARS = {"oki176": ["description_ja", "description_ko", "description_en", "description_zh_tw"]}
 
 
 def blank(v):
