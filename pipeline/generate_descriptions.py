@@ -28,6 +28,7 @@ import urllib.request
 import random
 import sys
 import time
+import unicodedata
 
 import anthropic
 
@@ -291,6 +292,17 @@ MAX_ATTEMPTS = 3  # first try + 2 regenerations when a check fails
 KANA = re.compile(r"[぀-ヿ]")
 LATIN_WORD = re.compile(r"[A-Za-z]{2,}")
 CLOCK_TIME = re.compile(r"\d{1,2}:\d{2}")
+HOUR_TEXT = {  # clock times written in words (2026-11-16: HH:MM alone missed 오전 9시 / 上午9點 / 9 a.m.)
+    "en": re.compile(r"\b\d{1,2}\s?(?:a\.?m\b\.?|p\.?m\b\.?)|\b(?:noon|midnight)\b", re.I),
+    "zh_tw": re.compile(r"\d{1,2}\s?(?:點|点|時(?!間))"),
+    "ko": re.compile(r"\d{1,2}\s?시(?!간)|정오|자정"),
+}
+META_TEXT = re.compile(  # prompt / tool text that leaked into a description
+    r"</?[A-Za-z_]+>|reasoning|(?-i:\binfo[A-Z])|\bfacts\b|basic (?:facts|information)|확인된 기본 정보|基本資訊", re.I)
+
+
+def has_time(lang, text):
+    return bool(CLOCK_TIME.search(text) or HOUR_TEXT[lang].search(text))
 USE_WORDS = {  # uses/occasions the prompt forbids
     "en": re.compile(r"\b(lunch|dinner|breakfast|light meal|date night)\b", re.I),
     "zh_tw": re.compile(r"午餐|晚餐|早餐|輕食"),
@@ -322,6 +334,17 @@ def strip_known_names(facts, lang, text):
     return text
 
 
+ENGLISH_PLAIN = {"about", "from", "near", "the", "is", "and", "in", "of", "with", "it", "its", "this", "located",
+                 "open", "closed", "prices", "price", "okinawa", "japanese", "restaurant"}
+
+
+def english_name(en_text):
+    """Subject of the first English sentence, i.e. how the English text names the shop."""
+    first = re.split(r"(?<=[.!?])\s+", en_text)[0]
+    m = re.match(r"(?:Located in [^,]+, |Open [^,]+, |Closed [^,]+, )?(.{2,80}?) (?:is|serves|offers|sits)\b", first)
+    return m.group(1) if m else ""
+
+
 def check_description(facts, result):
     """Problems a person would otherwise have to catch by eye; empty list = ok."""
     issues = []
@@ -334,13 +357,22 @@ def check_description(facts, result):
         rest = strip_known_names(facts, lang, text)
         if KANA.search(rest):
             issues.append(f"{lang}: kana outside the name")
-        if CLOCK_TIME.search(text):
+        if has_time(lang, text):
             issues.append(f"{lang}: opening times written out")
+        if META_TEXT.search(text):
+            issues.append(f"{lang}: prompt or tool text")
         if USE_WORDS[lang].search(text):
             issues.append(f"{lang}: meal-use word")
         if lang == "ko":
-            allowed = {"km"} | {w.lower() for w in LATIN_WORD.findall(name)}  # Latin inside the shop name is fine
-            words = [w for w in LATIN_WORD.findall(rest) if w.lower() not in allowed]
+            # Latin inside the shop name is fine, also when the name is full-width (ＲＩＭ) or katakana
+            # rendered in English (チョコレートゲイブルズ -> Chocolate Gables, taken from the English text)
+            allowed = {"km"} | {w.lower() for w in LATIN_WORD.findall(unicodedata.normalize("NFKC", name))}
+            allowed |= {w.lower() for w in re.findall("[A-Z][a-z]+", unicodedata.normalize("NFKC", name))}  # NewClubL -> New, Club
+            en_texts = " ".join([result.get("en") or "", (result.get("before_cleanup") or {}).get("en", "")])
+            allowed |= {w.lower() for w in LATIN_WORD.findall(english_name(en_texts))}
+            # proper nouns of the English text (Chocolate Gables, Subway, AEON Mall); never plain words like "about"
+            allowed |= {w.lower() for w in re.findall(r"\b[A-Z][A-Za-z]+", en_texts)} - ENGLISH_PLAIN
+            words = [w for w in LATIN_WORD.findall(unicodedata.normalize("NFKC", text)) if w.lower() not in allowed]
             if words:
                 issues.append(f"ko: English words {words[:3]}")
         numbers = set(KM_TEXT.findall(text))
@@ -609,7 +641,7 @@ def cmd_cleanup(args):
         v.setdefault("before_cleanup", {lang: v[lang] for lang in ("en", "zh_tw", "ko")})
         for lang in ("en", "zh_tw", "ko"):
             sents = [s for s in re.split(SENTENCE_SPLIT[lang], v[lang]) if s.strip()]
-            keep = [s for s in sents if not (CLOCK_TIME.search(s) or USE_WORDS[lang].search(s))]
+            keep = [s for s in sents if not (has_time(lang, s) or USE_WORDS[lang].search(s))]
             if len(keep) < len(sents):
                 stats[f"{lang}: sentences dropped"] += len(sents) - len(keep)
             text = JOIN[lang].join(s.strip() for s in keep)
@@ -670,6 +702,62 @@ def cmd_drop_nameless(args):
     print(f"emptied single sentences without the shop name: {dict(stats)}")
 
 
+def cmd_drop_times(args):
+    """All rows (decided 2026-11-16): drop sentences that write out clock times in any form
+    (11:00, 오전 9시, 上午9點, 9 a.m.); empty the language only when no sentence is left.
+    The single-nameless-sentence rule (drop-nameless) is NOT applied here. Originals: before_time_cleanup."""
+    cache = load_json(CACHE_PATH, {})
+    stats = collections.Counter()
+    rows = 0
+    for v in cache.values():
+        touched = False
+        for lang in ("en", "zh_tw", "ko"):
+            text = v.get(lang) or ""
+            sents = [x for x in re.split(SENTENCE_SPLIT[lang], text) if x.strip()]
+            keep = [x for x in sents if not has_time(lang, x)]
+            if len(keep) == len(sents):
+                continue
+            v.setdefault("before_time_cleanup", {})[lang] = text
+            v[lang] = JOIN[lang].join(x.strip() for x in keep)
+            stats[f"{lang}: sentences dropped"] += len(sents) - len(keep)
+            if not keep:
+                stats[f"{lang}: emptied"] += 1
+            touched = True
+        rows += touched
+    for v in cache.values():  # refresh flags with the current checks
+        issues = check_description(v["input_facts"], v) if v.get("input_facts") else []
+        issues = [i for i in issues if not (not v[i.split(":")[0]] and ("missing" in i))]
+        if issues:
+            v["check_issues"] = issues
+        else:
+            v.pop("check_issues", None)
+    save_json(CACHE_PATH, cache)
+    print(f"rows changed: {rows}; " + ", ".join(f"{k} {n}" for k, n in sorted(stats.items())))
+    print(f"still flagged: {sum(1 for v in cache.values() if v.get('check_issues'))}")
+
+
+def cmd_regen(args):
+    """Regenerate the given place_ids from scratch (normal API). The replaced text is kept as previous_version."""
+    ids = json.load(open(args.ids_file, encoding="utf-8"))
+    if len(ids) > CONFIRM_ABOVE and not args.yes:
+        sys.exit(f"{len(ids)} rows: more than {CONFIRM_ABOVE}, re-run with --yes")
+    cache = load_json(CACHE_PATH, {})
+    client = anthropic.Anthropic()
+    t_in = t_out = 0
+    for pid in ids:
+        old = cache[pid]
+        result = generate_checked(client, old["input_facts"])
+        t_in += result["input_tokens"]
+        t_out += result["output_tokens"]
+        result["input_facts"] = old["input_facts"]
+        result["previous_version"] = {k: old.get(k) for k in ("en", "zh_tw", "ko", "before_cleanup", "check_issues")}
+        cache[pid] = result
+        print(f"{old['input_facts']['name']}: attempts {result['attempts']}"
+              f"{', still ' + str(result['check_issues']) if result.get('check_issues') else ', ok'}")
+    save_json(CACHE_PATH, cache)
+    print(f"regen: {len(ids)} rows; tokens in {t_in}, out {t_out}, cost ${t_in * PRICE_IN + t_out * PRICE_OUT:.4f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -681,6 +769,10 @@ def main():
     sub.add_parser("batch-collect")
     sub.add_parser("cleanup")
     sub.add_parser("drop-nameless")
+    sub.add_parser("drop-times")
+    rg = sub.add_parser("regen")
+    rg.add_argument("ids_file")
+    rg.add_argument("--yes", action="store_true")
     run = sub.add_parser("run")
     run.add_argument("--limit", type=int)
     run.add_argument("--yes", action="store_true")
@@ -691,7 +783,7 @@ def main():
     {"estimate": cmd_estimate, "run": cmd_run, "show": cmd_show, "apply": cmd_apply,
      "batch-submit": cmd_batch_submit, "batch-status": cmd_batch_status,
      "batch-collect": cmd_batch_collect, "cleanup": cmd_cleanup,
-     "drop-nameless": cmd_drop_nameless}[args.cmd](args)
+     "drop-nameless": cmd_drop_nameless, "regen": cmd_regen, "drop-times": cmd_drop_times}[args.cmd](args)
 
 
 if __name__ == "__main__":
