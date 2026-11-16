@@ -1,0 +1,220 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          127.6895,
+          26.2152
+        ]
+      },
+      "properties": {
+        "pin_id": "okrtest01",
+        "id": "okrtest01",
+        "slug": "okrtest01-test-soba-shokudo",
+        "title": "Test Soba Shokudo",
+        "title_ja": "テストそば食堂",
+        "title_zh_tw": "測試沖繩麵食堂",
+        "address": "3-2-10 Makishi, Naha, Okinawa",
+        "address_ja": "沖縄県那覇市牧志3-2-10",
+        "address_zh-tw": "沖繩縣那霸市牧志3-2-10",
+        "phone_number": "+81-98-000-0001",
+        "opening_hours": "Mo-Su 11:00-20:00",
+        "opening_hours_note_ja": "不定休",
+        "opening_hours_note_en": "Irregular holidays",
+        "opening_hours_note_zh_tw": "不定期公休",
+        "price_range": "¥800〜¥1,500",
+        "price_level": 1,
+        "category": "4",
+        "genre": "okinawa_soba",
+        "lat": "26.2152",
+        "lng": "127.6895",
+        "geocode_source": "manual",
+        "geocode_precision": "house",
+        "show_on_map": true,
+        "approved": "1",
+        "official_url": null,
+        "description_ja": "国際通り近くのテスト用沖縄そば店です。",
+        "description_en": "A test Okinawa soba shop near Kokusai Street.",
+        "description_zh_tw": "國際通附近的測試用沖繩麵店。",
+        "photo_url": null,
+        "source": "test",
+        "updated_at": "2026-11-15"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          127.7543,
+          26.3158
+        ]
+      },
+      "properties": {
+        "pin_id": "okrtest02",
+        "id": "okrtest02",
+        "slug": "okrtest02-test-taco-rice-chatan",
+        "title": "Test Taco Rice Chatan",
+        "title_ja": "テストタコライス北谷",
+        "title_zh_tw": "測試塔可飯北谷",
+        "address": "15-69 Mihama, Chatan, Okinawa",
+        "address_ja": "沖縄県中頭郡北谷町美浜15-69",
+        "address_zh-tw": "沖繩縣中頭郡北谷町美濱15-69",
+        "phone_number": "+81-98-000-0002",
+        "opening_hours": "Mo-Su 10:00-22:00",
+        "opening_hours_note_ja": "年中無休",
+        "opening_hours_note_en": "Open every day",
+        "opening_hours_note_zh_tw": "全年無休",
+        "price_range": "¥1,000〜¥2,000",
+        "price_level": 2,
+        "category": "4",
+        "genre": "taco_rice",
+        "lat": "26.3158",
+        "lng": "127.7543",
+        "geocode_source": "manual",
+        "geocode_precision": "house",
+        "show_on_map": true,
+        "approved": "1",
+        "official_url": null,
+        "description_ja": "アメリカンビレッジ近くのテスト用タコライス店です。",
+        "description_en": "A test taco rice restaurant near American Village.",
+        "description_zh_tw": "美國村附近的測試用塔可飯餐廳。",
+        "photo_url": null,
+        "source": "test",
+        "updated_at": "2026-11-15"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          127.9772,
+          26.5915
+        ]
+      },
+      "properties": {
+        "pin_id": "okrtest03",
+        "id": "okrtest03",
+        "slug": "okrtest03-test-izakaya-nago",
+        "title": "Test Izakaya Nago",
+        "title_ja": "テスト居酒屋名護",
+        "title_zh_tw": "測試居酒屋名護",
+        "address": "1-5-1 Agarie, Nago, Okinawa",
+        "address_ja": "沖縄県名護市東江1-5-1",
+        "address_zh-tw": "沖繩縣名護市東江1-5-1",
+        "phone_number": "+81-98-000-0003",
+        "opening_hours": "Mo-Sa 17:00-24:00; Su off",
+        "opening_hours_note_ja": "日曜定休",
+        "opening_hours_note_en": "Closed on Sundays",
+        "opening_hours_note_zh_tw": "週日公休",
+        "price_range": "¥3,000〜¥5,000",
+        "price_level": 3,
+        "category": "4",
+        "genre": "izakaya",
+        "lat": "26.5915",
+        "lng": "127.9772",
+        "geocode_source": "manual",
+        "geocode_precision": "house",
+        "show_on_map": true,
+        "approved": "1",
+        "official_url": null,
+        "description_ja": "名護市のテスト用居酒屋です。",
+        "description_en": "A test izakaya in Nago City.",
+        "description_zh_tw": "名護市的測試用居酒屋。",
+        "photo_url": null,
+        "source": "test",
+        "updated_at": "2026-11-15"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          127.6648,
+          26.1243
+        ]
+      },
+      "properties": {
+        "pin_id": "okrtest04",
+        "id": "okrtest04",
+        "slug": "okrtest04-test-seafood-itoman",
+        "title": "Test Seafood Itoman",
+        "title_ja": "テスト海鮮糸満",
+        "title_zh_tw": "測試海鮮糸滿",
+        "address": "4-19 Nishizaki, Itoman, Okinawa",
+        "address_ja": "沖縄県糸満市西崎町4-19",
+        "address_zh-tw": "沖繩縣糸滿市西崎町4-19",
+        "phone_number": "+81-98-000-0004",
+        "opening_hours": "Tu-Su 11:00-15:00,17:00-21:00; Mo off",
+        "opening_hours_note_ja": "月曜定休",
+        "opening_hours_note_en": "Closed on Mondays",
+        "opening_hours_note_zh_tw": "週一公休",
+        "price_range": "¥2,000〜¥4,000",
+        "price_level": 2,
+        "category": "4",
+        "genre": "seafood",
+        "lat": "26.1243",
+        "lng": "127.6648",
+        "geocode_source": "manual",
+        "geocode_precision": "house",
+        "show_on_map": true,
+        "approved": "1",
+        "official_url": null,
+        "description_ja": "糸満漁港近くのテスト用海鮮料理店です。",
+        "description_en": "A test seafood restaurant near Itoman fishing port.",
+        "description_zh_tw": "糸滿漁港附近的測試用海鮮餐廳。",
+        "photo_url": null,
+        "source": "test",
+        "updated_at": "2026-11-15"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          127.8781,
+          26.694
+        ]
+      },
+      "properties": {
+        "pin_id": "okrtest05",
+        "id": "okrtest05",
+        "slug": "okrtest05-test-cafe-motobu",
+        "title": "Test Cafe Motobu",
+        "title_ja": "テストカフェ本部",
+        "title_zh_tw": "測試咖啡本部",
+        "address": "424 Ishikawa, Motobu, Okinawa",
+        "address_ja": "沖縄県国頭郡本部町石川424",
+        "address_zh-tw": "沖繩縣國頭郡本部町石川424",
+        "phone_number": "+81-98-000-0005",
+        "opening_hours": "Mo-Su 9:00-18:00",
+        "opening_hours_note_ja": "天候により休業あり",
+        "opening_hours_note_en": "May close due to weather",
+        "opening_hours_note_zh_tw": "可能因天候休息",
+        "price_range": "¥5,000〜¥10,000",
+        "price_level": 4,
+        "category": "4",
+        "genre": "cafe",
+        "lat": "26.694",
+        "lng": "127.8781",
+        "geocode_source": "manual",
+        "geocode_precision": "house",
+        "show_on_map": true,
+        "approved": "1",
+        "official_url": null,
+        "description_ja": "本部町のテスト用カフェです。",
+        "description_en": "A test cafe in Motobu Town.",
+        "description_zh_tw": "本部町的測試用咖啡廳。",
+        "photo_url": null,
+        "source": "test",
+        "updated_at": "2026-11-15"
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ Google Sheets (restaurant list) -> restaurants.geojson for MOP-SSG.
   python build_restaurants.py fetch                 # download the sheet as CSV
   python build_restaurants.py geocode [--limit N]   # Nominatim, 1 req/s, resumable cache
   python build_restaurants.py build   [--limit N]   # CSV + cache -> data/restaurants.geojson
-  python build_restaurants.py upload                # put data/restaurants.geojson to S3
+  python build_restaurants.py upload [--yes] [--etag E]  # merge test_restaurants.geojson, back up S3, upload
 
 All state lives in ./data (git-ignored):
   restaurants.csv       downloaded sheet
@@ -38,6 +38,8 @@ CSV_PATH = os.path.join(DATA, "restaurants.csv")
 CACHE_PATH = os.path.join(DATA, "geocode_cache.json")
 PIN_PATH = os.path.join(DATA, "pin_ids.json")
 OUT_PATH = os.path.join(DATA, "restaurants.geojson")
+UPLOAD_PATH = os.path.join(DATA, "restaurants.upload.geojson")  # OUT_PATH + test records, what goes to S3
+TEST_PATH = os.path.join(HERE, "test_restaurants.geojson")  # 5 fixed test records (okrtest01-05), committed
 
 def load_env(path):
     """Minimal KEY=VALUE reader for pipeline/.env (git-ignored); real env vars win."""
@@ -426,11 +428,54 @@ def cmd_fetch(args):
     print(f"fetch: {len(read_rows())} rows -> {CSV_PATH}")
 
 
+def merge_test_records():
+    """data/restaurants.geojson + the fixed test records (test_restaurants.geojson, committed).
+    The 5 test pages (okrtest01-05, noindex) must survive every upload."""
+    real = load_json(OUT_PATH, {"features": []})["features"]
+    tests = load_json(TEST_PATH, {"features": []})["features"]
+    if not real:
+        sys.exit(f"no features in {OUT_PATH}; run build first")
+    if len(tests) != 5:
+        sys.exit(f"expected 5 test records in {TEST_PATH}, found {len(tests)}")
+    for f in tests:
+        p = f["properties"]
+        assert p.get("source") == "test" and p["pin_id"].startswith("okrtest"), p.get("pin_id")
+    for f in real:
+        assert not f["properties"]["pin_id"].startswith("okrtest"), f["properties"]["pin_id"]
+    features = tests + real
+    for key in ("pin_id", "slug"):
+        dup = [k for k, n in collections.Counter(f["properties"][key] for f in features).items() if n > 1]
+        if dup:
+            sys.exit(f"duplicate {key}: {dup[:5]}")
+    return {"type": "FeatureCollection", "features": features}
+
+
+def aws_json(*cmd):
+    return json.loads(subprocess.run(["aws", *cmd, "--output", "json"], capture_output=True, text=True, check=True).stdout)
+
+
 def cmd_upload(args):
+    """Merge test records, show what will change, then back up the S3 object and upload (--yes)."""
+    data = merge_test_records()
+    save_json(UPLOAD_PATH, data, compact=True)
+    counts = collections.Counter((f["properties"].get("source"), str(f["properties"].get("approved")))
+                                 for f in data["features"])
+    head = aws_json("s3api", "head-object", "--bucket", S3_BUCKET, "--key", S3_KEY)
+    print(f"s3://{S3_BUCKET}/{S3_KEY}: ETag {head['ETag']}, {head['ContentLength']} bytes, {head['LastModified']}")
+    print(f"upload: {len(data['features'])} features {dict(counts)} "
+          f"({os.path.getsize(UPLOAD_PATH) / 1e6:.1f} MB) <- {UPLOAD_PATH}")
+    if args.etag and head["ETag"].strip('"') != args.etag.strip('"'):
+        sys.exit(f"S3 object changed (ETag {head['ETag']} != expected {args.etag}); check before uploading")
+    if not args.yes:
+        sys.exit("check the above, then re-run with --yes (optionally --etag <current ETag> to guard against changes)")
+    backup = f"backup/{S3_KEY}.{dt.datetime.now():%Y%m%d-%H%M%S}"
+    subprocess.run(["aws", "s3", "cp", f"s3://{S3_BUCKET}/{S3_KEY}", f"s3://{S3_BUCKET}/{backup}",
+                    "--only-show-errors"], check=True)
+    print(f"backup: s3://{S3_BUCKET}/{backup}")
     subprocess.run([
-        "aws", "s3api", "put-object", "--bucket", S3_BUCKET, "--key", S3_KEY, "--body", OUT_PATH,
+        "aws", "s3api", "put-object", "--bucket", S3_BUCKET, "--key", S3_KEY, "--body", UPLOAD_PATH,
         "--content-type", "application/json; charset=utf-8", "--server-side-encryption", "AES256",
-        "--query", "VersionId", "--output", "text",
+        "--query", "[ETag,VersionId]", "--output", "text",
     ], check=True)
 
 
@@ -438,6 +483,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["fetch", "geocode", "build", "upload"])
     ap.add_argument("--limit", type=int, help="only the first N rows (for testing)")
+    ap.add_argument("--yes", action="store_true", help="upload: actually back up and upload")
+    ap.add_argument("--etag", help="upload: stop unless the S3 object still has this ETag")
     args = ap.parse_args()
     {"fetch": cmd_fetch, "geocode": cmd_geocode, "build": cmd_build, "upload": cmd_upload}[args.command](args)
 
