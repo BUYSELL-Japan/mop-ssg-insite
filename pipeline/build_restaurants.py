@@ -399,7 +399,21 @@ EDITORIAL_FIELDS = [
     "approved", "show_on_map", "title_zh_tw", "title_ko", "address_zh-tw", "address_ko", "photo_url",
     "description_ja", "description_en", "description_zh_tw", "description_ko",
     "opening_hours_note_en", "opening_hours_note_zh_tw",
+    *("ad_tier", "mop_partner", "partner_service", "partner_lp_url", "ad_expires", "ad_coupon_text"),
 ]
+
+# Advertising tiers (2026-11-18). Set by hand per shop; a rebuild keeps them (EDITORIAL_FIELDS).
+#   ad_tier: null (general) / "basic" / "premium"     mop_partner: true for Landy (etc.) customers
+#   partner_service: e.g. "landy"   partner_lp_url: shop LP   ad_expires: "YYYY-MM-DD"
+#   ad_coupon_text: shown in the map popup for "premium" only
+AD_DEFAULTS = {
+    "ad_tier": None,
+    "mop_partner": False,
+    "partner_service": None,
+    "partner_lp_url": None,
+    "ad_expires": None,
+    "ad_coupon_text": None,
+}
 
 
 def previous_editorial():
@@ -488,6 +502,7 @@ def cmd_build(args):
                 "review_count": num(r["レビュー件数"], int),
                 "source": "google_places",
                 "updated_at": today,
+                **AD_DEFAULTS,
             },
         })
         features[-1]["properties"].update(keep.get(pid, {}))
@@ -524,6 +539,8 @@ def merge_test_records():
     for f in tests:
         p = f["properties"]
         assert p.get("source") == "test" and p["pin_id"].startswith("okrtest"), p.get("pin_id")
+        for k, v in AD_DEFAULTS.items():
+            p.setdefault(k, v)
     for f in real:
         assert not f["properties"]["pin_id"].startswith("okrtest"), f["properties"]["pin_id"]
     features = tests + real

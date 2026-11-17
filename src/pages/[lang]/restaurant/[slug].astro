@@ -29,18 +29,21 @@ const text = {
     genre: 'Genre', about: 'About', openMop: 'View on the MOP map', directions: 'Get directions',
     titleSuffix: 'Okinawa Restaurant Guide - MOP',
     gsiCredit: 'Source: Geospatial Information Authority of Japan',
+    exploreMap: '🗺️ Explore on Map',
   },
   zh: {
     home: '首頁', hours: '營業時間', price: '價格範圍', phone: '電話', address: '地址',
     genre: '類型', about: '介紹', openMop: '在 MOP 地圖中查看', directions: '路線導航',
     titleSuffix: '沖繩美食指南 - MOP',
     gsiCredit: '資料來源：日本國土地理院',
+    exploreMap: '🗺️ 在地圖上查看',
   },
   ko: {
     home: '홈', hours: '영업시간', price: '가격대', phone: '전화', address: '주소',
     genre: '장르', about: '소개', openMop: 'MOP 지도에서 보기', directions: '길찾기',
     titleSuffix: '오키나와 맛집 가이드 - MOP',
     gsiCredit: '출처：일본 국토지리원',
+    exploreMap: '🗺️ 지도에서 보기',
   },
 }[lang];
 
@@ -59,6 +62,11 @@ const pageDescription = [l.genre, l.address, l.description].filter(Boolean).join
 const mopUrl = `${baseUrl}/?pin_id=${r.pin_id}&lang=${lang}`;
 const directionsUrl = r.lat != null && r.lng != null
   ? `https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}`
+  : null;
+// Map app with the restaurant layer, centred on this shop (useRestaurantsLayer in MOP-Okinawa).
+// Same origin: the map app is served at mop-insite.com/ (app.mop-world.com does not resolve).
+const exploreMapUrl = r.lat != null && r.lng != null
+  ? `${baseUrl}/?show_restaurants=1&pin_id=${encodeURIComponent(r.pin_id)}&lang=${lang}`
   : null;
 
 const restaurantSchema = generateRestaurantSchema(r, lang, pageUrl);
@@ -112,6 +120,7 @@ const homePath = `/${lang === 'ko' ? 'en' : lang}/spot`; // spot index exists in
       <section class="actions">
         {r.show_on_map && <a href={mopUrl} class="button primary">{text.openMop} →</a>}
         {directionsUrl && <a href={directionsUrl} class="button" target="_blank" rel="noopener noreferrer">{text.directions}</a>}
+        {exploreMapUrl && <a href={exploreMapUrl} class="button">{text.exploreMap}</a>}
       </section>
     </article>
 
