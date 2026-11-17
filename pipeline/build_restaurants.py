@@ -6,6 +6,8 @@ Google Sheets (restaurant list) -> restaurants.geojson for MOP-SSG.
   python build_restaurants.py geocode-gsi [--limit N]  # 国土地理院 address search, 1 req/s, resumable
   python build_restaurants.py build   [--limit N]   # CSV + cache -> data/restaurants.geojson
   python build_restaurants.py upload [--yes] [--etag E]  # merge test_restaurants.geojson, back up S3, upload
+  python build_restaurants.py build-map             # data/restaurants.geojson -> data/restaurants_map.geojson (map layer)
+  python build_restaurants.py upload-map [--yes] [--etag E]  # back up S3 restaurants_map.geojson, upload
 
 All state lives in ./data (git-ignored):
   restaurants.csv       downloaded sheet
@@ -555,40 +557,109 @@ def aws_json(*cmd):
     return json.loads(subprocess.run(["aws", *cmd, "--output", "json"], capture_output=True, text=True, check=True).stdout)
 
 
+def s3_head(key):
+    """head-object, or None when the object does not exist yet."""
+    res = subprocess.run(["aws", "s3api", "head-object", "--bucket", S3_BUCKET, "--key", key, "--output", "json"],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        if "404" in res.stderr or "Not Found" in res.stderr:
+            return None
+        sys.exit(f"head-object s3://{S3_BUCKET}/{key} failed: {res.stderr.strip()}")
+    return json.loads(res.stdout)
+
+
+def s3_upload(path, key, summary, args):
+    """Show the current S3 object and what will be uploaded; with --yes back it up and upload.
+    --etag guards against the object having changed since it was checked ("none" for a new object)."""
+    head = s3_head(key)
+    current = head["ETag"].strip('"') if head else "none"
+    if head:
+        print(f"s3://{S3_BUCKET}/{key}: ETag {head['ETag']}, {head['ContentLength']} bytes, {head['LastModified']}")
+    else:
+        print(f"s3://{S3_BUCKET}/{key}: does not exist yet (ETag none)")
+    print(f"upload: {summary} ({os.path.getsize(path) / 1e6:.2f} MB) <- {path}")
+    if args.etag and current != args.etag.strip('"'):
+        sys.exit(f"S3 object changed (ETag {current} != expected {args.etag}); check before uploading")
+    if not args.yes:
+        sys.exit("check the above, then re-run with --yes (optionally --etag <current ETag> to guard against changes)")
+    if head:
+        backup = f"backup/{key}.{dt.datetime.now():%Y%m%d-%H%M%S}"
+        subprocess.run(["aws", "s3", "cp", f"s3://{S3_BUCKET}/{key}", f"s3://{S3_BUCKET}/{backup}",
+                        "--only-show-errors"], check=True)
+        print(f"backup: s3://{S3_BUCKET}/{backup}")
+    subprocess.run([
+        "aws", "s3api", "put-object", "--bucket", S3_BUCKET, "--key", key, "--body", path,
+        "--content-type", "application/json; charset=utf-8", "--server-side-encryption", "AES256",
+        "--query", "[ETag,VersionId]", "--output", "text",
+    ], check=True)
+
+
 def cmd_upload(args):
     """Merge test records, show what will change, then back up the S3 object and upload (--yes)."""
     data = merge_test_records()
     save_json(UPLOAD_PATH, data, compact=True)
     counts = collections.Counter((f["properties"].get("source"), str(f["properties"].get("approved")))
                                  for f in data["features"])
-    head = aws_json("s3api", "head-object", "--bucket", S3_BUCKET, "--key", S3_KEY)
-    print(f"s3://{S3_BUCKET}/{S3_KEY}: ETag {head['ETag']}, {head['ContentLength']} bytes, {head['LastModified']}")
-    print(f"upload: {len(data['features'])} features {dict(counts)} "
-          f"({os.path.getsize(UPLOAD_PATH) / 1e6:.1f} MB) <- {UPLOAD_PATH}")
-    if args.etag and head["ETag"].strip('"') != args.etag.strip('"'):
-        sys.exit(f"S3 object changed (ETag {head['ETag']} != expected {args.etag}); check before uploading")
-    if not args.yes:
-        sys.exit("check the above, then re-run with --yes (optionally --etag <current ETag> to guard against changes)")
-    backup = f"backup/{S3_KEY}.{dt.datetime.now():%Y%m%d-%H%M%S}"
-    subprocess.run(["aws", "s3", "cp", f"s3://{S3_BUCKET}/{S3_KEY}", f"s3://{S3_BUCKET}/{backup}",
-                    "--only-show-errors"], check=True)
-    print(f"backup: s3://{S3_BUCKET}/{backup}")
-    subprocess.run([
-        "aws", "s3api", "put-object", "--bucket", S3_BUCKET, "--key", S3_KEY, "--body", UPLOAD_PATH,
-        "--content-type", "application/json; charset=utf-8", "--server-side-encryption", "AES256",
-        "--query", "[ETag,VersionId]", "--output", "text",
-    ], check=True)
+    s3_upload(UPLOAD_PATH, S3_KEY, f"{len(data['features'])} features {dict(counts)}", args)
+
+
+# Light version for the map app's restaurant layer (MOP-Okinawa useRestaurantsLayer, 2026-11-18):
+# approved shops with coordinates only, and only the fields the pins and popups need.
+MAP_PATH = os.path.join(DATA, "restaurants_map.geojson")
+S3_MAP_KEY = "restaurants_map.geojson"
+MAP_FIELDS = ["id", "name", "lat", "lng", "rating", "rating_count", "genre", "address", "slug", "approved",
+              "ad_tier", "mop_partner", "partner_service"]
+
+
+def cmd_build_map(args):
+    features = load_json(OUT_PATH, {"features": []})["features"]
+    if not features:
+        sys.exit(f"no features in {OUT_PATH}; run build first")
+    out = []
+    for f in features:
+        p = f["properties"]
+        geom = f.get("geometry")
+        if str(p.get("approved")) != "1" or not geom or p.get("source") == "test":
+            continue
+        lng, lat = (round(c, 6) for c in geom["coordinates"][:2])
+        props = {
+            "id": p["pin_id"],
+            "name": p.get("title") or p.get("title_ja"),
+            "lat": lat,
+            "lng": lng,
+            "rating": p.get("rating"),
+            "rating_count": p.get("review_count"),
+            "genre": p.get("genre"),
+            "address": p.get("address"),
+            "slug": p["slug"],
+            "approved": "1",
+            "ad_tier": p.get("ad_tier"),
+            "mop_partner": bool(p.get("mop_partner")),
+            "partner_service": p.get("partner_service"),
+        }
+        assert list(props) == MAP_FIELDS
+        out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lng, lat]}, "properties": props})
+    save_json(MAP_PATH, {"type": "FeatureCollection", "features": out}, compact=True)
+    print(f"build-map: {len(out)} of {len(features)} features -> {MAP_PATH} "
+          f"({os.path.getsize(MAP_PATH) / 1e6:.2f} MB, full file {os.path.getsize(OUT_PATH) / 1e6:.1f} MB)")
+
+
+def cmd_upload_map(args):
+    data = load_json(MAP_PATH, {"features": []})
+    if not data["features"]:
+        sys.exit(f"no features in {MAP_PATH}; run build-map first")
+    s3_upload(MAP_PATH, S3_MAP_KEY, f"{len(data['features'])} features", args)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["fetch", "geocode", "geocode-gsi", "build", "upload"])
+    ap.add_argument("command", choices=["fetch", "geocode", "geocode-gsi", "build", "upload", "build-map", "upload-map"])
     ap.add_argument("--limit", type=int, help="only the first N rows (for testing)")
     ap.add_argument("--yes", action="store_true", help="upload: actually back up and upload")
     ap.add_argument("--etag", help="upload: stop unless the S3 object still has this ETag")
     args = ap.parse_args()
     {"fetch": cmd_fetch, "geocode": cmd_geocode, "geocode-gsi": cmd_geocode_gsi, "build": cmd_build,
-     "upload": cmd_upload}[args.command](args)
+     "upload": cmd_upload, "build-map": cmd_build_map, "upload-map": cmd_upload_map}[args.command](args)
 
 
 if __name__ == "__main__":
