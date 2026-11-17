@@ -30,6 +30,10 @@ const pageDescription = description || defaultDescription;
 // build.format 'file' gives pathnames like /en/spot.html; Cloudflare Pages serves them as /en/spot
 const cleanPathname = Astro.url.pathname.replace(/\.html$/, '').replace(/(.)\/$/, '$1');
 const pageUrl = ogUrl || `${Astro.url.origin}${cleanPathname}`;
+// Share image for pages without their own photo (restaurants, spot index, ...): Minna Beach,
+// 1200x630, also used by the map app (MOP-Okinawa index.html). Spot pages pass their own photo.
+const DEFAULT_OG_IMAGE = 'https://s3geojsonnew.s3.ap-southeast-2.amazonaws.com/og/mop-og-1200x630.jpg';
+const shareImage = ogImage || DEFAULT_OG_IMAGE;
 ---
 
 <!doctype html>
@@ -55,14 +59,16 @@ const pageUrl = ogUrl || `${Astro.url.origin}${cleanPathname}`;
 		<meta property="og:url" content={pageUrl} />
 		<meta property="og:title" content={pageTitle} />
 		<meta property="og:description" content={pageDescription} />
-		{ogImage && <meta property="og:image" content={ogImage} />}
-		
+		<meta property="og:image" content={shareImage} />
+		{!ogImage && <meta property="og:image:width" content="1200" />}
+		{!ogImage && <meta property="og:image:height" content="630" />}
+
 		<!-- Twitter -->
 		<meta property="twitter:card" content="summary_large_image" />
 		<meta property="twitter:url" content={pageUrl} />
 		<meta property="twitter:title" content={pageTitle} />
 		<meta property="twitter:description" content={pageDescription} />
-		{ogImage && <meta property="twitter:image" content={ogImage} />}
+		<meta property="twitter:image" content={shareImage} />
 
 		<link rel="canonical" href={pageUrl} />
 

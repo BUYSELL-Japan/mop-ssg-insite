@@ -2,7 +2,7 @@
 import Layout from '../../../layouts/Layout.astro';
 import LanguageSelector from '../../../components/LanguageSelector.astro';
 import { fetchRestaurantData, type RestaurantItem } from '../../../utils/dataFetcher';
-import { RESTAURANT_LANGS, isTranslated, localized, restaurantPath, type RestaurantLang } from '../../../utils/restaurant';
+import { RESTAURANT_LANGS, isTranslated, localized, metaDescription, restaurantPath, type RestaurantLang } from '../../../utils/restaurant';
 import { generateRestaurantSchema, generateBreadcrumbSchema } from '../../../utils/schema';
 
 export async function getStaticPaths() {
@@ -56,7 +56,7 @@ const alternateUrls = Object.fromEntries(
 );
 
 const pageTitle = `${l.name} | ${text.titleSuffix}`;
-const pageDescription = [l.genre, l.address, l.description].filter(Boolean).join(' / ').slice(0, 160);
+const pageDescription = metaDescription(r, lang);
 
 // Deep link into the map app; only meaningful when the pin is shown on the map
 const mopUrl = `${baseUrl}/?pin_id=${r.pin_id}&lang=${lang}`;
@@ -120,7 +120,8 @@ const homePath = `/${lang === 'ko' ? 'en' : lang}/spot`; // spot index exists in
       <section class="actions">
         {r.show_on_map && <a href={mopUrl} class="button primary">{text.openMop} →</a>}
         {directionsUrl && <a href={directionsUrl} class="button" target="_blank" rel="noopener noreferrer">{text.directions}</a>}
-        {exploreMapUrl && <a href={exploreMapUrl} class="button">{text.exploreMap}</a>}
+        {/* nofollow: the map app is one page; ~17,000 parameter URLs must not be crawled as duplicates */}
+        {exploreMapUrl && <a href={exploreMapUrl} class="button" rel="nofollow">{text.exploreMap}</a>}
       </section>
     </article>
 

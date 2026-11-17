@@ -1,4 +1,6 @@
 import type { RestaurantItem } from './dataFetcher';
+import { genreLabel } from '../lib/genreLabels';
+import { municipalityLabel } from '../lib/municipalities';
 
 export type RestaurantLang = 'en' | 'zh' | 'ko';
 
@@ -10,17 +12,32 @@ export type RestaurantLang = 'en' | 'zh' | 'ko';
  */
 export const RESTAURANT_LANGS: RestaurantLang[] = ['en', 'zh', 'ko'];
 
-// genre code (data) -> display label. Unknown codes fall back to the code itself.
-const GENRE_LABELS: Record<string, Record<RestaurantLang, string>> = {
-  okinawa_soba: { en: 'Okinawa Soba', zh: '沖繩麵', ko: '오키나와 소바' },
-  taco_rice: { en: 'Taco Rice', zh: '塔可飯', ko: '타코라이스' },
-  izakaya: { en: 'Izakaya', zh: '居酒屋', ko: '이자카야' },
-  seafood: { en: 'Seafood', zh: '海鮮', ko: '해산물' },
-  cafe: { en: 'Cafe', zh: '咖啡廳', ko: '카페' },
-};
+// genre code (data) -> display label: src/lib/genreLabels.ts (all codes in restaurants.geojson)
+export { genreLabel };
 
-export function genreLabel(code: string, lang: RestaurantLang): string {
-  return GENRE_LABELS[code]?.[lang] ?? GENRE_LABELS[code]?.en ?? code;
+const DESCRIPTION_MAX = { en: 155, zh: 110, ko: 110 } as const; // CJK characters are wider in results
+const SITE_SUFFIX = '- MOP';
+
+/**
+ * meta / og description: "<description start> | <municipality> · <genre>".
+ * Without a description: "<genre> · <municipality> - MOP". No postal code, no raw genre code.
+ */
+export function metaDescription(r: RestaurantItem, lang: RestaurantLang): string {
+  const l = localized(r, lang);
+  const city = municipalityLabel(r.address_ja || r.address, lang);
+  const body = l.description.replace(/\s+/g, ' ').trim();
+  if (!body) return `${[l.genre, city].filter(Boolean).join(' · ')} ${SITE_SUFFIX}`.trim();
+
+  const place = [city, l.genre].filter(Boolean).join(' · ');
+  const tail = place ? ` | ${place}` : '';
+  const room = DESCRIPTION_MAX[lang] - tail.length;
+  if (body.length <= room) return body + tail;
+  // Too long: end at the last full sentence that fits; otherwise cut (at a word for English) with "…"
+  const cut = body.slice(0, room - 1);
+  const sentenceEnd = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('。')); // ko sentences end with ". "
+  if (sentenceEnd > room * 0.5) return cut.slice(0, sentenceEnd + 1).trimEnd() + tail;
+  const space = lang === 'en' ? cut.lastIndexOf(' ') : -1;
+  return (space > room * 0.6 ? cut.slice(0, space) : cut).trimEnd() + '…' + tail;
 }
 
 /** True when the record has its own content in this language (no English fallback needed). */
