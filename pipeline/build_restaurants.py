@@ -3,6 +3,7 @@ Google Sheets (restaurant list) -> restaurants.geojson for MOP-SSG.
 
   python build_restaurants.py fetch                 # download the sheet as CSV
   python build_restaurants.py geocode [--limit N]   # Nominatim, 1 req/s, resumable cache
+  python build_restaurants.py geocode-gsi [--limit N]  # 国土地理院 address search, 1 req/s, resumable
   python build_restaurants.py build   [--limit N]   # CSV + cache -> data/restaurants.geojson
   python build_restaurants.py upload [--yes] [--etag E]  # merge test_restaurants.geojson, back up S3, upload
 
@@ -201,9 +202,79 @@ def cmd_geocode(args):
     save_json(QUERY_CACHE_PATH, _query_cache or {})
 
 
+# ------------------------------------------------------------------ GSI (国土地理院) address search
+
+# Free, no key, no published quota: keep it at 1 request/s. Data source must be credited as 国土地理院.
+# Decided 2026-11-17: use GSI only when it matches down to the lot number (番地/号); otherwise keep the
+# Nominatim town-level point and mark geocode_accuracy "low".
+GSI_URL = "https://msearch.gsi.go.jp/address-search/AddressSearch"
+GSI_CACHE_PATH = os.path.join(DATA, "gsi_cache.json")  # place_id -> {"q": query, "res": first 3 hits or {"error"}}
+GSI_INTERVAL = 1.0
+
+
+def gsi_query(addr):
+    """〒904-0000 沖縄県…１丁目２−３ -> 沖縄県…1丁目2-3 (postal code removed, NFKC, minus signs -> '-')."""
+    a = unicodedata.normalize("NFKC", addr or "")
+    a = re.sub(r"〒?\s*\d{3}-\d{4}\s*", "", a)
+    a = re.sub(r"(?<=\d)[−‐-―ー－](?=\d)", "-", a)
+    return a.strip()
+
+
+def gsi_level(title):
+    """'沖縄県…一丁目２４番５号' -> lot; '…三丁目' -> chome; '沖縄県国頭村浜' -> town."""
+    t = unicodedata.normalize("NFKC", title or "")
+    if re.search(r"\d+番地?|\d+号|番\d|\d+-\d+$", t):
+        return "lot"
+    if t.endswith("丁目"):
+        return "chome"
+    return "town"
+
+
+def gsi_point(entry):
+    """(lat, lng, level) of the first hit inside Okinawa, or None."""
+    res = (entry or {}).get("res")
+    if not isinstance(res, list) or not res:
+        return None
+    hit = res[0]
+    lng, lat = hit["geometry"]["coordinates"][:2]
+    if not in_okinawa(lat, lng):
+        return None
+    return lat, lng, gsi_level(hit["properties"].get("title"))
+
+
+def cmd_geocode_gsi(args):
+    rows = [r for r in read_rows(args.limit) if primary_genre(r) not in NON_FOOD_GENRES]
+    cache = load_json(GSI_CACHE_PATH, {})
+    todo = [r for r in rows if r["place_id"] not in cache or "error" in (cache[r["place_id"]].get("res") or {})]
+    print(f"geocode-gsi: {len(rows)} rows, {len(rows) - len(todo)} cached, {len(todo)} to go "
+          f"(~{len(todo) * (GSI_INTERVAL + 0.3) / 3600:.1f} h)", flush=True)
+    errors = 0
+    for i, r in enumerate(todo, 1):
+        q = gsi_query(r["住所"])
+        try:
+            req = urllib.request.Request(GSI_URL + "?q=" + urllib.parse.quote(q), headers={"User-Agent": "MOPApp/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as res:
+                hits = json.loads(res.read())
+            cache[r["place_id"]] = {"q": q, "res": hits[:3]}
+            errors = 0
+        except Exception as e:  # leave it for the next run
+            errors += 1
+            print(f"  ! {r['place_id']} {type(e).__name__}: {e}", flush=True)
+            if errors >= 20:
+                print("too many consecutive errors, stopping (re-run to resume)", flush=True)
+                break
+            time.sleep(10)
+        time.sleep(GSI_INTERVAL)
+        if i % 100 == 0 or i == len(todo):
+            save_json(GSI_CACHE_PATH, cache)
+            levels = collections.Counter((gsi_point(cache.get(x["place_id"])) or (0, 0, "none"))[2] for x in rows)
+            print(f"{len(rows) - len(todo) + i}/{len(rows)} done {dict(levels)}", flush=True)
+    save_json(GSI_CACHE_PATH, cache)
+
+
 # ------------------------------------------------------------------ transforms
 
-DAYS = {"月曜日": "Mo", "火曜日": "Tu", "水曜日": "We", "木曜日": "Th", "金曜日": "Fr", "土曜日": "Sa", "日曜日": "Su"}
+DAYS ={"月曜日": "Mo", "火曜日": "Tu", "水曜日": "We", "木曜日": "Th", "金曜日": "Fr", "土曜日": "Sa", "日曜日": "Su"}
 DAY_ORDER = list(DAYS.values())
 TIME_RE = re.compile(r"(\d{1,2})時(\d{2})分")
 
@@ -342,11 +413,13 @@ def previous_editorial():
 def cmd_build(args):
     rows = read_rows(args.limit)
     cache = load_json(CACHE_PATH, {})
+    gsi_cache = load_json(GSI_CACHE_PATH, {})
     keep = previous_editorial()
     pins = assign_pin_ids(read_rows())  # always register the whole sheet so numbering follows sheet order
     today = dt.date.today().isoformat()
 
     features, unconverted_hours, missing_geo = [], 0, 0
+    accuracy_counts = collections.Counter()
     excluded = collections.Counter()
     for r in rows:
         if primary_genre(r) in NON_FOOD_GENRES:
@@ -357,7 +430,16 @@ def cmd_build(args):
         name = r["店舗名"].strip()
         geo = cache.get(pid)
         has_geo = bool(geo and geo.get("ok"))
+        gsi = gsi_point(gsi_cache.get(pid))
+        if gsi and gsi[2] == "lot":  # GSI matched the lot number: use it
+            point, geo_source, geo_precision, geo_accuracy = (gsi[1], gsi[0]), "gsi", "lot", "high"
+        elif has_geo:  # town-level Nominatim point, kept but marked
+            point, geo_source, geo_precision, geo_accuracy = (geo["lng"], geo["lat"]), "nominatim", geo.get("type"), "low"
+        else:
+            point = geo_source = geo_precision = geo_accuracy = None
+        has_geo = point is not None
         missing_geo += not has_geo
+        accuracy_counts[geo_accuracy] += 1
         hours, hours_note = to_osm_hours(r["営業時間"])
         if hours and not re.match(r"^[A-Z][a-z]", hours):
             unconverted_hours += 1
@@ -367,7 +449,7 @@ def cmd_build(args):
 
         features.append({
             "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [geo["lng"], geo["lat"]]} if has_geo else None,
+            "geometry": {"type": "Point", "coordinates": list(point)} if has_geo else None,
             "properties": {
                 "pin_id": pin,
                 "id": pin,
@@ -387,8 +469,9 @@ def cmd_build(args):
                 "price_level": price_level,
                 "category": "4",
                 "genre": primary_genre(r) or None,
-                "geocode_source": "nominatim" if has_geo else None,
-                "geocode_precision": geo.get("type") if has_geo else None,
+                "geocode_source": geo_source,  # "gsi" (国土地理院, credit required) / "nominatim"
+                "geocode_precision": geo_precision,  # "lot" for GSI, Nominatim place type otherwise
+                "geocode_accuracy": geo_accuracy,  # "high" = lot number matched, "low" = town-level point
                 # 2026-11-15 decision: coordinates are town-level, so no map pins yet (geometry is kept)
                 "show_on_map": False,
                 # 2026-11-15 decision: unpublished until a description is written; flip to "1" per record
@@ -413,6 +496,7 @@ def cmd_build(args):
     n = len(features)
     print(f"build: {n} features -> {OUT_PATH} ({os.path.getsize(OUT_PATH) / 1e6:.1f} MB)")
     print(f"  with coordinates: {n - missing_geo} ({(n - missing_geo) / n:.1%}), without: {missing_geo}")
+    print(f"  geocode accuracy: {dict(accuracy_counts)}")
     print(f"  opening_hours kept as original text: {unconverted_hours}")
     print(f"  excluded as non-food genre: {sum(excluded.values())} {dict(excluded.most_common())}")
 
@@ -481,12 +565,13 @@ def cmd_upload(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["fetch", "geocode", "build", "upload"])
+    ap.add_argument("command", choices=["fetch", "geocode", "geocode-gsi", "build", "upload"])
     ap.add_argument("--limit", type=int, help="only the first N rows (for testing)")
     ap.add_argument("--yes", action="store_true", help="upload: actually back up and upload")
     ap.add_argument("--etag", help="upload: stop unless the S3 object still has this ETag")
     args = ap.parse_args()
-    {"fetch": cmd_fetch, "geocode": cmd_geocode, "build": cmd_build, "upload": cmd_upload}[args.command](args)
+    {"fetch": cmd_fetch, "geocode": cmd_geocode, "geocode-gsi": cmd_geocode_gsi, "build": cmd_build,
+     "upload": cmd_upload}[args.command](args)
 
 
 if __name__ == "__main__":
