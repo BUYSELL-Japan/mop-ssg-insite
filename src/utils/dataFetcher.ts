@@ -152,6 +152,7 @@ export interface RestaurantItem {
   genre: string;
   lat: number | null;
   lng: number | null;
+  geocode_source: string;
   show_on_map: boolean;
   official_url: string | null;
   description_en: string;
@@ -203,6 +204,7 @@ export function fetchRestaurantData(): Promise<RestaurantItem[]> {
             genre: str(p.genre),
             lat: coords ? Number(coords[1]) : null,
             lng: coords ? Number(coords[0]) : null,
+            geocode_source: str(p.geocode_source),
             show_on_map: p.show_on_map === true || p.show_on_map === 'true' || p.show_on_map === '1',
             official_url: p.official_url ? str(p.official_url) : null,
             description_en: str(p.description_en),
