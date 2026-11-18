@@ -38,6 +38,13 @@ async function handleRequest(request) {
       return proxyFetch(originalPath, SSG_URL, request);
     }
 
+    // 5-1. Search Console 所有確認ファイル (MOP-SSG public/google*.html)。Pages は .html を拡張子なしへ 308 で
+    // 転送するので、拡張子なしで取りに行き 200 をそのまま返す（Google はリダイレクトを嫌う）。2026-11-18 まではこの
+    // パスが地図アプリの index.html を返しており、所有確認は DNS の TXT レコードで通っている。
+    if (/^\/google[0-9a-f]+\.html$/.test(path)) {
+      return proxyFetch(originalPath.replace(/\.html$/, ''), SSG_URL, request);
+    }
+
     // 5-2. ガイドブック側のサイトマップ (Astro自動生成分を呼び出す)
     if (path === '/sitemap-index.xml' || path.startsWith('/sitemap-0.xml')) {
       return proxyFetch(originalPath, GUIDEBOOK_URL, request);
