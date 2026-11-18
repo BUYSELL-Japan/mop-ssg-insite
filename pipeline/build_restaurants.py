@@ -675,7 +675,7 @@ MAP_PATH = os.path.join(DATA, "restaurants_map.geojson")
 S3_MAP_KEY = "restaurants_map.geojson"
 MAP_FIELDS = ["id", "name", "name_en", "name_zh", "name_ko", "lat", "lng", "rating", "rating_count", "genre",
               "address", "slug", "approved", "ad_tier", "mop_partner", "partner_service",
-              "google_maps_url"]  # 2026-11-18: Get Directions opens the shop's own Google Maps page
+              "google_maps_url", "official_url"]  # 2026-11-18: Get Directions opens the shop's own Google Maps page
 
 
 def cmd_build_map(args):
@@ -707,6 +707,7 @@ def cmd_build_map(args):
             "mop_partner": bool(p.get("mop_partner")),
             "partner_service": p.get("partner_service"),
             "google_maps_url": p.get("google_maps_url"),
+            "official_url": p.get("official_url"),  # 2026-11-18: website / Instagram / Facebook … button
         }
         assert list(props) == MAP_FIELDS
         out.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lng, lat]}, "properties": props})
