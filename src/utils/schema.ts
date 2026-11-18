@@ -2,9 +2,25 @@ import type { Language } from './language';
 import type { RestaurantItem } from './dataFetcher';
 import { localized, toSchemaOpeningHours, type RestaurantLang } from './restaurant';
 
+const TRACKING_PARAM = /^(igsh|igshid|fbclid|gclid|utm_.+)$/i;
+
+/** official_url (shop site / Instagram / Facebook …) for schema.org sameAs: http(s) only, share/tracking params removed */
+function sameAsUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    [...u.searchParams.keys()].filter((k) => TRACKING_PARAM.test(k)).forEach((k) => u.searchParams.delete(k));
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function generateRestaurantSchema(r: RestaurantItem, lang: RestaurantLang, pageUrl: string) {
   const l = localized(r, lang);
   const openingHours = toSchemaOpeningHours(r.opening_hours);
+  const sameAs = sameAsUrl(r.official_url);
 
   return {
     '@context': 'https://schema.org',
@@ -13,6 +29,7 @@ export function generateRestaurantSchema(r: RestaurantItem, lang: RestaurantLang
     ...(r.title_ja && r.title_ja !== l.name && { alternateName: r.title_ja }),
     ...(l.description && { description: l.description }),
     url: pageUrl,
+    ...(sameAs && { sameAs }),
     ...(r.photo_url && { image: r.photo_url }),
     ...(l.address && {
       address: {
