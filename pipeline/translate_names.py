@@ -318,6 +318,12 @@ def cmd_apply(args):
         if c and c.get("name_ja") == p["title"]:  # only when the Japanese name has not changed since
             p["name_en"], p["name_zh"], p["name_ko"] = c["en"], c["zh"], c["ko"]
             applied += 1
+    # hand-checked corrections (fix_name_mentions.py) win, also over copied Latin names
+    fixes = load_json(os.path.join(DATA, "name_fixes.json"), {})
+    for f in geo["features"]:
+        for lang, val in fixes.get(f["properties"].get("id"), {}).items():
+            if lang in ("en", "zh", "ko"):
+                f["properties"]["name_" + lang] = val
     save_json(OUT_PATH, geo, compact=True)
     print(f"apply: translated names on {applied}, Latin names copied on {copied} "
           f"(of {len(geo['features'])} features)")
