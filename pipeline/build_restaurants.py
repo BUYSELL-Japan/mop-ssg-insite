@@ -3,7 +3,7 @@ Google Sheets (restaurant list) -> restaurants.geojson for MOP-SSG.
 
   python build_restaurants.py fetch                 # download the sheet as CSV
   python build_restaurants.py geocode [--limit N]   # Nominatim, 1 req/s, resumable cache
-  python build_restaurants.py geocode-gsi [--limit N]  # 国土地理院 address search, 1 req/s, resumable
+  python build_restaurants.py geocode-gsi [--limit N] [--retry]  # 国土地理院 address search, 1 req/s, resumable
   python build_restaurants.py build   [--limit N]   # CSV + cache -> data/restaurants.geojson
   python build_restaurants.py upload [--yes] [--etag E]  # merge test_restaurants.geojson, back up S3, upload
   python build_restaurants.py build-map             # data/restaurants.geojson -> data/restaurants_map.geojson (map layer)
@@ -109,8 +109,10 @@ def address_queries(addr):
     """Full address first, then the address with the trailing house number / building removed."""
     full = normalize_address(addr)
     queries = [full]
-    # e.g. 沖縄県うるま市勝連平敷屋430-2 -> 沖縄県うるま市勝連平敷屋
-    trimmed = re.sub(r"[\s\d\-]+[^\d]*$", "", full).strip() if re.search(r"\d", full) else ""
+    # e.g. 沖縄県うるま市勝連平敷屋430-2 -> 沖縄県うるま市勝連平敷屋. Cut at the first digit: the old
+    # "trailing digits" rule only removed "4F" from "…美浜1-2 ○○ビル 4F" (fixed 2026-11-18).
+    m = re.search(r"\d", full)
+    trimmed = full[:m.start()].strip(" -") if m else ""
     if trimmed and trimmed != full and len(trimmed) >= 5:
         queries.append(trimmed)
     return queries
@@ -214,12 +216,57 @@ GSI_CACHE_PATH = os.path.join(DATA, "gsi_cache.json")  # place_id -> {"q": query
 GSI_INTERVAL = 1.0
 
 
+def english_order_to_ja(addr):
+    """Google's reversed form '…, 1丁目-2-3 屋富祖 浦添市 沖縄県 901-0000' -> '沖縄県浦添市屋富祖1丁目2-3'.
+    None when the address is already in Japanese order or no usable '… 市町村 [郡] 沖縄県' segment is found."""
+    a = unicodedata.normalize("NFKC", addr or "").replace("⁠", "").strip()
+    if a.startswith(("〒", "沖縄県", "日本")):
+        return None
+    a = re.sub(r"(\d+)\s*chome-?", r"\1丁目", a, flags=re.I)
+    seg = next((x.strip() for x in reversed(a.split(",")) if "沖縄県" in x), None)
+    if not seg:
+        return None
+    toks = [t for t in seg.split() if not re.fullmatch(r"\d{3}-\d{4}", t)]
+    if toks[-1:] != ["沖縄県"]:
+        return None
+    split = []
+    for t in toks[:-1]:  # '久貝-123-4' -> '久貝', '123-4'
+        m = re.fullmatch(r"([^\d\-]+)-(\d.*)", t)
+        split += [m.group(1), m.group(2)] if m else [t]
+    num = [t for t in split if re.search(r"\d", t)]
+    places = [t for t in split if not re.search(r"\d", t) and re.search(r"[぀-鿿]", t)]
+    if not any(re.search(r"[市町村]$", t) for t in places):
+        return None  # e.g. only '島尻郡': too vague to place a pin
+    out = []
+    for t in reversed(places):  # outermost first; drop repeats such as '浜 粟国村 島尻郡' after '粟国村,'
+        if t not in out:
+            out.append(t)
+    n = num[-1] if num else ""
+    m = re.fullmatch(r"(\d+)丁目-?(.*)", n)
+    if m:
+        n = f"{m.group(1)}丁目{m.group(2)}"
+    return "沖縄県" + "".join(out) + n.rstrip("-")
+
+
 def gsi_query(addr):
-    """〒904-0000 沖縄県…１丁目２−３ -> 沖縄県…1丁目2-3 (postal code removed, NFKC, minus signs -> '-')."""
-    a = unicodedata.normalize("NFKC", addr or "")
+    """〒904-0000 沖縄県…１丁目２−３ -> 沖縄県…1丁目2-3 (postal code removed, NFKC, minus signs -> '-').
+    English-order addresses are put back in Japanese order first (2026-11-18)."""
+    a = english_order_to_ja(addr) or unicodedata.normalize("NFKC", addr or "")
+    a = re.sub(r"^(日本|Japan)[、,]\s*", "", a)
     a = re.sub(r"〒?\s*\d{3}-\d{4}\s*", "", a)
+    a = re.sub(r"〒\s*\d+\s*", "", a)            # malformed postal codes such as '〒319'
+    a = re.sub(r"\s+JP\b.*$", "", a)             # '… JP 9071541' tails
+    a = re.sub(r"(\S+?郡)\1", r"\1", a)           # '国頭郡国頭郡宜野座村' -> '国頭郡宜野座村'
+    a = re.sub(r"(?<=沖縄県)[^\s県郡]+郡(?=[^\s郡]+?市)", "", a)  # '沖縄県中頭郡沖縄市' -> '沖縄県沖縄市' (cities have no 郡)
     a = re.sub(r"(?<=\d)[−‐-―ー－](?=\d)", "-", a)
     return a.strip()
+
+
+def municipality(title):
+    """'沖縄県中頭郡北谷町美浜' -> '北谷町' (None if not found)."""
+    t = unicodedata.normalize("NFKC", title or "").replace("沖縄県", "")
+    m = re.match(r"(?:[^市町村]+?郡)?(.+?[市町村])", t)
+    return m.group(1) if m else None
 
 
 def gsi_level(title):
@@ -244,10 +291,26 @@ def gsi_point(entry):
     return lat, lng, gsi_level(hit["properties"].get("title"))
 
 
+def gsi_town_point(entry, address):
+    """Town / chome-level GSI hit, accepted only when its municipality appears in the shop's address."""
+    p = gsi_point(entry)
+    if not p or p[2] == "lot":
+        return None
+    muni = municipality(entry["res"][0]["properties"].get("title"))
+    return p if muni and muni in unicodedata.normalize("NFKC", address or "") else None
+
+
 def cmd_geocode_gsi(args):
     rows = [r for r in read_rows(args.limit) if primary_genre(r) not in NON_FOOD_GENRES]
     cache = load_json(GSI_CACHE_PATH, {})
     todo = [r for r in rows if r["place_id"] not in cache or "error" in (cache[r["place_id"]].get("res") or {})]
+    if args.retry:  # entries without a usable point whose query would now be different (2026-11-18)
+        nom = load_json(CACHE_PATH, {})
+        todo += [r for r in rows if r not in todo
+                 and not (nom.get(r["place_id"]) or {}).get("ok")
+                 and not (gsi_point(cache[r["place_id"]]) or (0, 0, ""))[2] == "lot"
+                 and not gsi_town_point(cache[r["place_id"]], r["住所"])
+                 and gsi_query(r["住所"]) != cache[r["place_id"]].get("q")]
     print(f"geocode-gsi: {len(rows)} rows, {len(rows) - len(todo)} cached, {len(todo)} to go "
           f"(~{len(todo) * (GSI_INTERVAL + 0.3) / 3600:.1f} h)", flush=True)
     errors = 0
@@ -452,6 +515,8 @@ def cmd_build(args):
             point, geo_source, geo_precision, geo_accuracy = (gsi[1], gsi[0]), "gsi", "lot", "high"
         elif has_geo:  # town-level Nominatim point, kept but marked
             point, geo_source, geo_precision, geo_accuracy = (geo["lng"], geo["lat"]), "nominatim", geo.get("type"), "low"
+        elif gsi_town := gsi_town_point(gsi_cache.get(pid), r["住所"]):  # 2026-11-18: GSI town / chome level
+            point, geo_source, geo_precision, geo_accuracy = (gsi_town[1], gsi_town[0]), "gsi", "town", "low"
         else:
             point = geo_source = geo_precision = geo_accuracy = None
         has_geo = point is not None
@@ -487,7 +552,7 @@ def cmd_build(args):
                 "category": "4",
                 "genre": primary_genre(r) or None,
                 "geocode_source": geo_source,  # "gsi" (国土地理院, credit required) / "nominatim"
-                "geocode_precision": geo_precision,  # "lot" for GSI, Nominatim place type otherwise
+                "geocode_precision": geo_precision,  # GSI: "lot" / "town" (町・丁目); Nominatim: its place type
                 "geocode_accuracy": geo_accuracy,  # "high" = lot number matched, "low" = town-level point
                 # 2026-11-15 decision: coordinates are town-level, so no map pins yet (geometry is kept)
                 "show_on_map": False,
@@ -660,6 +725,7 @@ def main():
     ap.add_argument("command", choices=["fetch", "geocode", "geocode-gsi", "build", "upload", "build-map", "upload-map"])
     ap.add_argument("--limit", type=int, help="only the first N rows (for testing)")
     ap.add_argument("--yes", action="store_true", help="upload: actually back up and upload")
+    ap.add_argument("--retry", action="store_true", help="geocode-gsi: re-query unusable hits whose query changed")
     ap.add_argument("--etag", help="upload: stop unless the S3 object still has this ETag")
     args = ap.parse_args()
     {"fetch": cmd_fetch, "geocode": cmd_geocode, "geocode-gsi": cmd_geocode_gsi, "build": cmd_build,
