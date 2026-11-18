@@ -6,7 +6,7 @@ This folder is the source of truth (until 2026-11-15 it only existed in the Clou
 | Path (prefix match, case-insensitive) | Pages project |
 |---|---|
 | `/en/spot*`, `/zh/spot*`, `/en/restaurant*`, `/zh/restaurant*`, `/_ssg_assets/*`, `/sitemap.xml`, `/robots.txt` | `mop-ssg-insite` (this repo) |
-| `/en/guidebook*`, `/zh/guidebook*`, `/_guidebook_assets/*`, `/_astro/*`, `/sitemap-index.xml`, `/sitemap-0.xml` | `mop-guidebook-insite` |
+| `/en/guidebook*`, `/zh/guidebook*`, `/ko/guidebook*`, `/_guidebook_assets/*`, `/_astro/*`, `/sitemap-index.xml`, `/sitemap-0.xml` | `mop-guidebook-insite` |
 | everything else (incl. `/sw.js`, `/workbox-*`, `/assets/*`) | `mop-insite` (map app) |
 
 This Worker is **not** deployed by the Pages build. Deploy it manually:

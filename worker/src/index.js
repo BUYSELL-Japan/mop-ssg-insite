@@ -43,7 +43,7 @@ async function handleRequest(request) {
     }
 
     // 6. ガイドブック表示
-    if (path.startsWith('/en/guidebook') || path.startsWith('/zh/guidebook')) {
+    if (path.startsWith('/en/guidebook') || path.startsWith('/zh/guidebook') || path.startsWith('/ko/guidebook')) {
       return proxyFetch(originalPath, GUIDEBOOK_URL, request);
     }
 
