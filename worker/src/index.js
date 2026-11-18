@@ -29,7 +29,8 @@ async function handleRequest(request) {
 
     // 4. 一般的なアセットフォルダ
     if (originalPath.startsWith('/assets/')) {
-       return proxyFetch(originalPath, MAIN_APP_URL, request);
+       // a missing hashed file would otherwise come back as index.html with 200 (see 8.)
+       return notFoundIfHtml(await proxyFetch(originalPath, MAIN_APP_URL, request));
     }
 
     // 5. サイトマップ / robots.txt (SSGの動的スクリプトを呼び出す)
@@ -58,11 +59,22 @@ async function handleRequest(request) {
     }
 
     // 8. その他すべて (メインアプリ)
-    return proxyFetch(originalPath, MAIN_APP_URL, request);
+    // The map app is a single page at "/" (login also returns to "/"). Pages answers every unknown path with
+    // its index.html and 200, so a non-"/" path that comes back as HTML is a soft 404: keep the body (people
+    // still land on the map) but send 404 so search engines drop it (2026-11-18). Files such as /sw.js,
+    // /manifest.json or /favicon.ico come back as non-HTML and pass through unchanged.
+    const response = await proxyFetch(originalPath, MAIN_APP_URL, request);
+    return originalPath === '/' ? response : notFoundIfHtml(response);
 
   } catch (err) {
     return fetch(new Request(new URL(new URL(request.url).pathname, MAIN_APP_URL).toString(), request));
   }
+}
+
+/** Map-app responses only: Pages' index.html fallback (200 + HTML) for a path that is not "/" -> same body, 404 */
+function notFoundIfHtml(response) {
+  const isHtml = response.status === 200 && (response.headers.get('content-type') || '').startsWith('text/html');
+  return isHtml ? new Response(response.body, { status: 404, statusText: 'Not Found', headers: response.headers }) : response;
 }
 
 async function proxyFetch(path, origin, originalRequest) {
