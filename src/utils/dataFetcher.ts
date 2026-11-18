@@ -139,6 +139,9 @@ export interface RestaurantItem {
   title_ja: string;
   title_zh_tw: string;
   title_ko: string;
+  name_en: string; // translate_names.py; '' when not translated yet
+  name_zh: string;
+  name_ko: string;
   address: string;
   address_ja: string;
   address_zh_tw: string;
@@ -191,6 +194,9 @@ export function fetchRestaurantData(): Promise<RestaurantItem[]> {
             title_ja: str(p.title_ja ?? p['title.ja']),
             title_zh_tw: str(p.title_zh_tw),
             title_ko: str(p.title_ko),
+            name_en: str(p.name_en),
+            name_zh: str(p.name_zh),
+            name_ko: str(p.name_ko),
             address: str(p.address),
             address_ja: str(p.address_ja),
             address_zh_tw: str(p['address_zh-tw'] ?? p.address_zh_tw),

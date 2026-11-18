@@ -95,7 +95,8 @@ const homePath = `/${lang === 'ko' ? 'en' : lang}/spot`; // spot index exists in
     <header class="hero">
       {l.genre && <p class="genre">{l.genre}</p>}
       <h1>{l.name}</h1>
-      {lang !== 'en' && r.title_ja && <p class="subtitle">{r.title_ja}</p>}
+      {/* Japanese name under the translated one, so visitors can match the shop sign */}
+      {r.title_ja && r.title_ja !== l.name && <p class="subtitle">{r.title_ja}</p>}
     </header>
 
     <article class="content">

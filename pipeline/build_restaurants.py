@@ -402,6 +402,7 @@ EDITORIAL_FIELDS = [
     "description_ja", "description_en", "description_zh_tw", "description_ko",
     "opening_hours_note_en", "opening_hours_note_zh_tw",
     *("ad_tier", "mop_partner", "partner_service", "partner_lp_url", "ad_expires", "ad_coupon_text"),
+    *("name_en", "name_zh", "name_ko"),  # translate_names.py (2026-11-18)
 ]
 
 # Advertising tiers (2026-11-18). Set by hand per shop; a rebuild keeps them (EDITORIAL_FIELDS).
@@ -607,8 +608,8 @@ def cmd_upload(args):
 # approved shops with coordinates only, and only the fields the pins and popups need.
 MAP_PATH = os.path.join(DATA, "restaurants_map.geojson")
 S3_MAP_KEY = "restaurants_map.geojson"
-MAP_FIELDS = ["id", "name", "lat", "lng", "rating", "rating_count", "genre", "address", "slug", "approved",
-              "ad_tier", "mop_partner", "partner_service"]
+MAP_FIELDS = ["id", "name", "name_en", "name_zh", "name_ko", "lat", "lng", "rating", "rating_count", "genre",
+              "address", "slug", "approved", "ad_tier", "mop_partner", "partner_service"]
 
 
 def cmd_build_map(args):
@@ -625,6 +626,9 @@ def cmd_build_map(args):
         props = {
             "id": p["pin_id"],
             "name": p.get("title") or p.get("title_ja"),
+            "name_en": p.get("name_en"),
+            "name_zh": p.get("name_zh"),
+            "name_ko": p.get("name_ko"),
             "lat": lat,
             "lng": lng,
             "rating": p.get("rating"),

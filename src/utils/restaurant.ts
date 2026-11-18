@@ -56,7 +56,8 @@ export function localized(r: RestaurantItem, lang: RestaurantLang) {
   const pick = (zh: string, ko: string, en: string) =>
     (lang === 'zh' ? zh : lang === 'ko' ? ko : en) || en;
   return {
-    name: pick(r.title_zh_tw, r.title_ko, r.title) || r.title_ja,
+    // Translated name of this language (translate_names.py), else the Japanese name
+    name: (lang === 'zh' ? r.name_zh : lang === 'ko' ? r.name_ko : r.name_en) || r.title || r.title_ja,
     address: pick(r.address_zh_tw, r.address_ko, r.address) || r.address_ja,
     hoursNote: pick(r.opening_hours_note_zh_tw, '', r.opening_hours_note_en),
     description: pick(r.description_zh_tw, r.description_ko, r.description_en),

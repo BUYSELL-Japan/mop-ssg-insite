@@ -10,6 +10,7 @@ export function generateRestaurantSchema(r: RestaurantItem, lang: RestaurantLang
     '@context': 'https://schema.org',
     '@type': 'Restaurant',
     name: l.name,
+    ...(r.title_ja && r.title_ja !== l.name && { alternateName: r.title_ja }),
     ...(l.description && { description: l.description }),
     url: pageUrl,
     ...(r.photo_url && { image: r.photo_url }),
