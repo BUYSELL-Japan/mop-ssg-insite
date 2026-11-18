@@ -20,6 +20,7 @@ import argparse
 import collections
 import csv
 import datetime as dt
+import gzip
 import json
 import os
 import re
@@ -636,9 +637,10 @@ def s3_head(key):
     return json.loads(res.stdout)
 
 
-def s3_upload(path, key, summary, args):
+def s3_upload(path, key, summary, args, content_type="application/json; charset=utf-8", extra=()):
     """Show the current S3 object and what will be uploaded; with --yes back it up and upload.
-    --etag guards against the object having changed since it was checked ("none" for a new object)."""
+    --etag guards against the object having changed since it was checked ("none" for a new object).
+    extra: more put-object options, e.g. ("--content-encoding", "gzip", "--cache-control", "…")."""
     head = s3_head(key)
     current = head["ETag"].strip('"') if head else "none"
     if head:
@@ -657,7 +659,7 @@ def s3_upload(path, key, summary, args):
         print(f"backup: s3://{S3_BUCKET}/{backup}")
     subprocess.run([
         "aws", "s3api", "put-object", "--bucket", S3_BUCKET, "--key", key, "--body", path,
-        "--content-type", "application/json; charset=utf-8", "--server-side-encryption", "AES256",
+        "--content-type", content_type, "--server-side-encryption", "AES256", *extra,
         "--query", "[ETag,VersionId]", "--output", "text",
     ], check=True)
 
@@ -674,6 +676,7 @@ def cmd_upload(args):
 # Light version for the map app's restaurant layer (MOP-Okinawa useRestaurantsLayer, 2026-11-18):
 # approved shops with coordinates only, and only the fields the pins and popups need.
 MAP_PATH = os.path.join(DATA, "restaurants_map.geojson")
+MAP_CACHE_CONTROL = "public, max-age=3600"
 S3_MAP_KEY = "restaurants_map.geojson"
 MAP_FIELDS = ["id", "name", "name_en", "name_zh", "name_ko", "lat", "lng", "rating", "rating_count", "genre",
               "address", "slug", "approved", "ad_tier", "mop_partner", "partner_service",
@@ -722,7 +725,15 @@ def cmd_upload_map(args):
     data = load_json(MAP_PATH, {"features": []})
     if not data["features"]:
         sys.exit(f"no features in {MAP_PATH}; run build-map first")
-    s3_upload(MAP_PATH, S3_MAP_KEY, f"{len(data['features'])} features", args)
+    # 2026-11-18: served gzip-compressed (S3 does not compress) with a 1-hour browser cache.
+    # mtime=0 keeps the .gz byte-identical for the same input, so its MD5 (= S3 ETag) is reproducible.
+    gz_path = MAP_PATH + ".gz"
+    with open(MAP_PATH, "rb") as src, open(gz_path, "wb") as raw:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0) as gz:
+            gz.write(src.read())
+    print(f"gzip: {os.path.getsize(MAP_PATH) / 1e6:.2f} MB -> {os.path.getsize(gz_path) / 1e6:.2f} MB")
+    s3_upload(gz_path, S3_MAP_KEY, f"{len(data['features'])} features (gzip)", args, content_type="application/json",
+              extra=("--content-encoding", "gzip", "--cache-control", MAP_CACHE_CONTROL))
 
 
 def main():
