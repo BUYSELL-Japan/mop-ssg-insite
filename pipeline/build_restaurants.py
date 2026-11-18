@@ -596,12 +596,14 @@ def cmd_fetch(args):
 
 
 def merge_test_records():
-    """data/restaurants.geojson + the fixed test records (test_restaurants.geojson, committed).
-    The 5 test pages (okrtest01-05, noindex) must survive every upload."""
+    """Approved shops in data/restaurants.geojson + the fixed test records (test_restaurants.geojson, committed).
+    The 5 test pages (okrtest01-05, noindex) must survive every upload.
+    Unapproved shops stay local (2026-11-18): the S3 file is public and MOP-SSG only builds approved "1" pages."""
     real = load_json(OUT_PATH, {"features": []})["features"]
     tests = load_json(TEST_PATH, {"features": []})["features"]
     if not real:
         sys.exit(f"no features in {OUT_PATH}; run build first")
+    real = [f for f in real if str(f["properties"].get("approved")) == "1"]
     if len(tests) != 5:
         sys.exit(f"expected 5 test records in {TEST_PATH}, found {len(tests)}")
     for f in tests:
